@@ -57,7 +57,9 @@ public class CrafterWebSocketClient extends WebSocketClient {
     }
 
     private static URI createURI(CrafterConfig config) {
-        String url = String.format("ws://%s/website/plugin/wss?website-id=%s&plugin-secret=%s&server-id=%s",
+        String protocol = config.isUseSsl() ? "wss" : "ws";
+        String url = String.format("%s://%s/website/plugin/wss?website-id=%s&plugin-secret=%s&server-id=%s",
+                protocol,
                 config.getApiUrl(),
                 config.getWebsiteId(),
                 config.getPluginSecret(),

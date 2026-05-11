@@ -19,4 +19,5 @@ reconnect-delay-seconds: 5
 max-reconnect-attempts: -1
 ping-interval-seconds: 30
 debug: false
+use-ssl: true
 

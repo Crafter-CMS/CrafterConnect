@@ -30,7 +30,7 @@ import java.nio.file.Path;
 @Plugin(
         id = "crafter-connect",
         name = "CrafterConnect",
-        version = "1.0.0",
+        version = "1.0.1",
         description = "crafter.net.tr satın alım delivery plugin",
         url = "https://crafter.net.tr",
         authors = {"crafter.net.tr"}
@@ -83,7 +83,7 @@ public class CrafterVelocityPlugin {
         );
 
         // Update Checker
-        new net.crafter.plugin.core.UpdateChecker("1.0.0").checkForUpdates(latest -> {
+        new net.crafter.plugin.core.UpdateChecker("1.0.1").checkForUpdates(latest -> {
             logger.warn("====================================================");
             logger.warn(languageManager.getMessage("new_version_available"));
             logger.warn(languageManager.getMessage("latest_version", latest));
@@ -203,6 +203,7 @@ public class CrafterVelocityPlugin {
         cfg.setMaxReconnectAttempts(node.node("max-reconnect-attempts").getInt(-1));
         cfg.setPingIntervalSeconds(node.node("ping-interval-seconds").getInt(30));
         cfg.setDebug(node.node("debug").getBoolean(false));
+        cfg.setUseSsl(node.node("use-ssl").getBoolean(true));
 
         return cfg;
 

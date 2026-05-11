@@ -33,6 +33,9 @@ public class CrafterConfig {
     /** Komut loglarını konsola yaz */
     private boolean debug = false;
 
+    /** SSL/TLS kullanılsın mı? (wss://) */
+    private boolean useSsl = true;
+
     // --- Getters & Setters ---
 
     public String getApiUrl() { return apiUrl; }
@@ -61,5 +64,8 @@ public class CrafterConfig {
 
     public boolean isDebug() { return debug; }
     public void setDebug(boolean debug) { this.debug = debug; }
+
+    public boolean isUseSsl() { return useSsl; }
+    public void setUseSsl(boolean useSsl) { this.useSsl = useSsl; }
 }
 

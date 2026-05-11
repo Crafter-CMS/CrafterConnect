@@ -29,6 +29,7 @@ website-id: "YOUR_WEBSITE_ID"
 plugin-secret: "YOUR_SECRET_KEY"
 server-id: "YOUR_SERVER_ID"
 language: "tr" # tr veya en
+use-ssl: true # SSL kullanıyorsanız true (api.crafter.net.tr için zorunlu)
 ```
 
 ### 3. Komutlar ve Yetkiler

@@ -188,6 +188,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         cfg.setMaxReconnectAttempts(getConfig().getInt("max-reconnect-attempts", -1));
         cfg.setPingIntervalSeconds(getConfig().getInt("ping-interval-seconds", 30));
         cfg.setDebug(getConfig().getBoolean("debug", false));
+        cfg.setUseSsl(getConfig().getBoolean("use-ssl", true));
         return cfg;
     }
 
