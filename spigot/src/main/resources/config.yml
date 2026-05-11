@@ -2,7 +2,8 @@
 
 # API Ayarları
 # Website ID ve Secret'ı crafter.net.tr dashboard'undan alabilirsiniz.
-api-url: "localhost:3000"
+# API Bağlantı Adresi
+api-url: "api.crafter.net.tr"
 website-id: "YOUR_WEBSITE_ID"
 plugin-secret: "YOUR_SECRET"
 

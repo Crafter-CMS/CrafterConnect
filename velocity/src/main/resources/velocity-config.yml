@@ -3,8 +3,8 @@
 # ║    crafter.net.tr                        ║
 # ╚══════════════════════════════════════════╝
 
-# API Base URL (örn: localhost:3000 veya api.crafter.net.tr)
-api-url: "localhost:3000"
+# API Bağlantı Adresi
+api-url: "api.crafter.net.tr"
 
 # Website ID (dashboard'dan alınır)
 website-id: "YOUR_WEBSITE_ID"

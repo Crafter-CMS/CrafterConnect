@@ -84,10 +84,11 @@ public class VelocityCommandExecutor implements CommandExecutor {
         if (playerOpt.isEmpty()) return;
         
         Player player = playerOpt.get();
+        net.crafter.plugin.core.LanguageManager lm = plugin.getLanguageManager();
         if (success) {
-            player.sendMessage(net.kyori.adventure.text.Component.text("§6[Crafter] §a✔ " + message));
+            player.sendMessage(net.kyori.adventure.text.Component.text(lm.getMessage("prefix") + lm.getMessage("purchase_success", message)));
         } else {
-            player.sendMessage(net.kyori.adventure.text.Component.text("§6[Crafter] §c✖ " + message));
+            player.sendMessage(net.kyori.adventure.text.Component.text(lm.getMessage("prefix") + lm.getMessage("purchase_error", message)));
         }
     }
 

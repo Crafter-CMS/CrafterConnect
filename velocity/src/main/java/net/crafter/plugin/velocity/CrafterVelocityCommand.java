@@ -20,31 +20,35 @@ public class CrafterVelocityCommand implements RawCommand {
         var source = invocation.source();
         String args = invocation.arguments().trim();
 
+        net.crafter.plugin.core.LanguageManager lm = plugin.getLanguageManager();
+        if (lm == null) return;
+
         if (!source.hasPermission("crafter.admin")) {
-            source.sendMessage(Component.text("You don't have permission.", NamedTextColor.RED));
+            source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("no_permission")));
             return;
         }
 
         if (args.isEmpty() || args.equals("help")) {
-            source.sendMessage(Component.text("[Crafter] Usage: /crafter <status|reload>", NamedTextColor.GOLD));
+            source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("usage")));
             return;
         }
 
         switch (args.toLowerCase()) {
             case "status" -> {
                 boolean connected = plugin.getWsClient() != null && plugin.getWsClient().isConnected();
-                source.sendMessage(Component.text(
-                        "[Crafter] Status: " + (connected ? "CONNECTED" : "DISCONNECTED"),
-                        connected ? NamedTextColor.GREEN : NamedTextColor.RED
-                ));
-                source.sendMessage(Component.text(
-                        "[Crafter] Offline Queue: " + (plugin.getWsClient() != null
-                                ? plugin.getWsClient().getOfflineQueueSize() : 0) + " commands",
-                        NamedTextColor.YELLOW
-                ));
+                source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_title")));
+                source.sendMessage(Component.text(lm.getMessage("status_info_line", (connected ? lm.getMessage("status_connected") : lm.getMessage("status_disconnected")))));
+                source.sendMessage(Component.text(lm.getMessage("status_queue_line", (plugin.getWsClient() != null ? plugin.getWsClient().getOfflineQueueSize() : 0))));
             }
-            default -> source.sendMessage(Component.text(
-                    "[Crafter] Usage: /crafter <status>", NamedTextColor.GOLD));
+            case "reload" -> {
+                try {
+                    plugin.reload();
+                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("reloaded")));
+                } catch (Exception e) {
+                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("reload_error", e.getMessage())));
+                }
+            }
+            default -> source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("usage")));
         }
     }
 

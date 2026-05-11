@@ -61,6 +61,7 @@ public class CrafterVelocityPlugin {
 
         try {
             crafterConfig = loadConfig();
+            loadLanguage();
         } catch (IOException e) {
             logger.error("Failed to load config: {}", e.getMessage());
             return;
@@ -84,9 +85,9 @@ public class CrafterVelocityPlugin {
         // Update Checker
         new net.crafter.plugin.core.UpdateChecker("1.0.0").checkForUpdates(latest -> {
             logger.warn("====================================================");
-            logger.warn("A new version of CrafterConnect is available!");
-            logger.warn("Latest: {}", latest);
-            logger.warn("Download: https://github.com/Crafter-CMS/CrafterConnect/releases");
+            logger.warn(languageManager.getMessage("new_version_available"));
+            logger.warn(languageManager.getMessage("latest_version", latest));
+            logger.warn(languageManager.getMessage("download_url", "https://github.com/Crafter-CMS/CrafterConnect/releases"));
             logger.warn("====================================================");
         });
 
@@ -109,10 +110,67 @@ public class CrafterVelocityPlugin {
         }
     }
 
+    public void reload() throws IOException {
+        crafterConfig = loadConfig();
+        loadLanguage();
+        if (wsClient != null) {
+            wsClient.shutdown();
+        }
+        VelocityCommandExecutor executor = new VelocityCommandExecutor(server, logger, this);
+        wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
+        wsClient.start();
+    }
+
     @Subscribe
     public void onDisconnect(com.velocitypowered.api.event.connection.DisconnectEvent event) {
         if (playerManager != null) {
             playerManager.removePlayer(event.getPlayer().getUsername());
+        }
+    }
+
+    private void loadLanguage() throws IOException {
+        String lang = crafterConfig.getLanguage();
+        Path langDir = dataDirectory.resolve("lang");
+        if (!Files.exists(langDir)) {
+            Files.createDirectories(langDir);
+        }
+
+        Path langPath = langDir.resolve(lang + ".yml");
+        if (!Files.exists(langPath)) {
+            try (InputStream in = getClass().getResourceAsStream("/lang/" + lang + ".yml")) {
+                if (in != null) {
+                    Files.copy(in, langPath);
+                } else {
+                    // Eğer resource'da yoksa ve tr/en ise oluştur
+                    if (lang.equals("tr") || lang.equals("en")) {
+                         // Default loading from resource if possible or fallback
+                    }
+                }
+            }
+        }
+
+        YamlConfigurationLoader loader = YamlConfigurationLoader.builder()
+                .path(langPath)
+                .build();
+        ConfigurationNode node = loader.load();
+        
+        java.util.Map<String, String> messages = new java.util.HashMap<>();
+        flattenNode("", node, messages);
+        
+        if (languageManager == null) {
+            languageManager = new net.crafter.plugin.core.LanguageManager(lang);
+        }
+        languageManager.setMessages(messages);
+    }
+
+    private void flattenNode(String path, ConfigurationNode node, java.util.Map<String, String> messages) {
+        if (node.isMap()) {
+            for (java.util.Map.Entry<Object, ? extends ConfigurationNode> entry : node.childrenMap().entrySet()) {
+                String newPath = path.isEmpty() ? entry.getKey().toString() : path + "." + entry.getKey().toString();
+                flattenNode(newPath, entry.getValue(), messages);
+            }
+        } else if (node.raw() != null) {
+            messages.put(path, node.getString());
         }
     }
 
@@ -136,7 +194,7 @@ public class CrafterVelocityPlugin {
         ConfigurationNode node = loader.load();
 
         CrafterConfig cfg = new CrafterConfig();
-        cfg.setApiUrl(node.node("api-url").getString("localhost:3000"));
+        cfg.setApiUrl(node.node("api-url").getString("api.crafter.net.tr"));
         cfg.setWebsiteId(node.node("website-id").getString("YOUR_WEBSITE_ID"));
         cfg.setPluginSecret(node.node("plugin-secret").getString("YOUR_SECRET"));
         cfg.setServerId(node.node("server-id").getString("my-proxy-1"));
@@ -152,6 +210,7 @@ public class CrafterVelocityPlugin {
 
     // Getters
 
+    public net.crafter.plugin.core.LanguageManager getLanguageManager() { return languageManager; }
     public CrafterWebSocketClient getWsClient() { return wsClient; }
     public CrafterConfig getCrafterConfig() { return crafterConfig; }
     public ProxyServer getServer() { return server; }

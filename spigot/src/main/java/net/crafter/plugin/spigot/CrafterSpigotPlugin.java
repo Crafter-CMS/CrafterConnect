@@ -67,10 +67,10 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         // Update Checker
         new net.crafter.plugin.core.UpdateChecker(getDescription().getVersion()).checkForUpdates(latest -> {
             getLogger().warning("====================================================");
-            getLogger().warning("A new version of CrafterConnect is available!");
-            getLogger().warning("Current: " + getDescription().getVersion());
-            getLogger().warning("Latest: " + latest);
-            getLogger().warning("Download: https://github.com/Crafter-CMS/CrafterConnect/releases");
+            getLogger().warning(languageManager.getMessage("new_version_available"));
+            getLogger().warning(languageManager.getMessage("current_version", getDescription().getVersion()));
+            getLogger().warning(languageManager.getMessage("latest_version", latest));
+            getLogger().warning(languageManager.getMessage("download_url", "https://github.com/Crafter-CMS/CrafterConnect/releases"));
             getLogger().warning("====================================================");
         });
 
@@ -103,19 +103,18 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("crafter")) return false;
-
-        if (!sender.hasPermission("crafter.admin")) {
-            sender.sendMessage("§cYetkiniz yok.");
-            return true;
-        }
-
+        
         if (args.length == 0) {
-            sender.sendMessage("§6[Crafter] §fKullanım: /crafter <status|reload>");
+            sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("usage"));
             return true;
         }
 
         switch (args[0].toLowerCase()) {
             case "status" -> {
+                if (!sender.hasPermission("crafter.admin")) {
+                    sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("no_permission"));
+                    return true;
+                }
                 boolean connected = wsClient != null && wsClient.isConnected();
                 sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("status_title"));
                 sender.sendMessage(languageManager.getMessage("status_info_line", (connected ? languageManager.getMessage("status_connected") : languageManager.getMessage("status_disconnected"))));
@@ -126,17 +125,25 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
                     sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("no_permission"));
                     return true;
                 }
-                reloadConfig();
-                crafterConfig = loadCrafterConfig();
-                loadLanguage();
-                wsClient.shutdown();
-                SpigotCommandExecutor executor = new SpigotCommandExecutor(this);
-                wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
-                wsClient.start();
-                sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("reloaded"));
+                try {
+                    reloadConfig();
+                    crafterConfig = loadCrafterConfig();
+                    loadLanguage();
+                    wsClient.shutdown();
+                    SpigotCommandExecutor executor = new SpigotCommandExecutor(this);
+                    wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
+                    wsClient.start();
+                    sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("reloaded"));
+                } catch (Exception e) {
+                    sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("reload_error", e.getMessage()));
+                }
             }
             case "magaza", "shop" -> {
                 if (!(sender instanceof Player player)) return true;
+                if (!player.hasPermission("crafter.shop")) {
+                    player.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("no_permission"));
+                    return true;
+                }
                 if (!marketManager.isLoaded()) {
                     pendingShopPlayers.add(player.getName());
                     wsClient.getProducts(); 
@@ -156,6 +163,10 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
             }
             case "sandik", "chest" -> {
                 if (!(sender instanceof Player player)) return true;
+                if (!player.hasPermission("crafter.chest")) {
+                    player.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("no_permission"));
+                    return true;
+                }
                 player.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("chest_opening"));
                 wsClient.getChest(player.getName());
                 menuManager.openMenu(player, new net.crafter.plugin.spigot.menu.ChestMenu(this, player).getInventory());
@@ -168,7 +179,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
 
     private CrafterConfig loadCrafterConfig() {
         CrafterConfig cfg = new CrafterConfig();
-        cfg.setApiUrl(getConfig().getString("api-url", "localhost:3000"));
+        cfg.setApiUrl(getConfig().getString("api-url", "api.crafter.net.tr"));
         cfg.setWebsiteId(getConfig().getString("website-id", "YOUR_WEBSITE_ID"));
         cfg.setPluginSecret(getConfig().getString("plugin-secret", "YOUR_SECRET"));
         cfg.setServerId(getConfig().getString("server-id", "my-server-1"));

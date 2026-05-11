@@ -31,15 +31,18 @@ server-id: "YOUR_SERVER_ID"
 language: "tr" # tr veya en
 ```
 
-### 3. Komutlar ve Kullanım
+### 3. Komutlar ve Yetkiler
 
-| Komut                          | Yetki           | Açıklama                                                        |
-| :----------------------------- | :-------------- | :-------------------------------------------------------------- |
-| `/crafter magaza`              | `crafter.user`  | Web sitenizdeki ürünleri oyun içinde kategori bazlı görüntüler. |
-| `/crafter magaza <categoryId>` | `crafter.user`  | Doğrudan belirli bir kategoriyi açar.                           |
-| `/crafter sandik`              | `crafter.user`  | Satın aldığınız ama henüz teslim almadığınız eşyaları listeler. |
-| `/crafter status`              | `crafter.admin` | WebSocket bağlantı durumunu ve bekleyen komutları gösterir.     |
-| `/crafter reload`              | `crafter.admin` | Yapılandırmayı ve dil dosyalarını yeniler.                      |
+| Komut | Yetki | Açıklama |
+| :--- | :--- | :--- |
+| `/crafter magaza` | `crafter.shop` | Web sitenizdeki ürünleri oyun içinde kategori bazlı görüntüler. |
+| `/crafter magaza <categoryId>` | `crafter.shop` | Doğrudan belirli bir kategoriyi açar. |
+| `/crafter sandik` | `crafter.chest` | Satın aldığınız ama henüz teslim almadığınız eşyaları listeler. |
+| `/crafter status` | `crafter.admin` | WebSocket bağlantı durumunu ve bekleyen komutları gösterir. |
+| `/crafter reload` | `crafter.admin` | Yapılandırmayı ve dil dosyalarını yeniler. |
+
+> [!NOTE]
+> Varsayılan olarak tüm oyunculara yetki vermek isterseniz, LuckPerms gibi bir plugin ile `crafter.shop` ve `crafter.chest` yetkilerini `default` grubuna ekleyebilirsiniz.
 
 ---
 
@@ -90,3 +93,9 @@ Eklentimiz PlaceholderAPI (PAPI) ile tam entegre çalışır. Bu sayede web site
 ```bash
 mvn clean package
 ```
+
+---
+
+## 📜 Lisans
+
+Bu proje **MIT Lisansı** ile lisanslanmıştır. Detaylar için `LICENSE` dosyasına göz atabilirsiniz.

@@ -5,7 +5,6 @@ messages:
   usage: "§fKullanım: /crafter <status|reload|magaza|sandik>"
   no_permission: "§cBu komutu kullanmak için yetkiniz yok!"
   reloaded: "§aEklenti başarıyla yenilendi!"
-  reload_error: "§cHata: Yenileme sırasında bir sorun oluştu! ({0})"
   status_title: "§fSunucu Durumu:"
   status_connected: "§aBAĞLI"
   status_disconnected: "§cBAĞLI DEĞİL"
