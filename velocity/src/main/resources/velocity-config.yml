@@ -1,0 +1,22 @@
+# ╔══════════════════════════════════════════╗
+# ║    CrafterConnect - Velocity Config      ║
+# ║    crafter.net.tr                        ║
+# ╚══════════════════════════════════════════╝
+
+# API Base URL (örn: localhost:3000 veya api.crafter.net.tr)
+api-url: "localhost:3000"
+
+# Website ID (dashboard'dan alınır)
+website-id: "YOUR_WEBSITE_ID"
+
+# Plugin Secret (dashboard'dan alınan güvenlik anahtarı)
+plugin-secret: "YOUR_SECRET"
+
+# Proxy sunucusu için ID (dashboard ile eşleşmeli)
+server-id: "my-proxy-1"
+
+reconnect-delay-seconds: 5
+max-reconnect-attempts: -1
+ping-interval-seconds: 30
+debug: false
+

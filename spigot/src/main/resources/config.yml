@@ -1,0 +1,18 @@
+# CrafterConnect Yapılandırma Dosyası
+
+# API Ayarları
+# Website ID ve Secret'ı crafter.net.tr dashboard'undan alabilirsiniz.
+api-url: "localhost:3000"
+website-id: "YOUR_WEBSITE_ID"
+plugin-secret: "YOUR_SECRET"
+
+# Sunucu ID'si (Bu sunucunun dashboard'daki ID'si ile aynı olmalıdır)
+server-id: "37e9c8e0-cdf2-424d-9b36-f139e6e1cdd7"
+
+# Dil Ayarı (tr, en gibi lang/ klasöründeki dosya ismi)
+language: "tr"
+
+# Gelişmiş Ayarlar
+reconnect-delay-seconds: 5
+ping-interval-seconds: 30
+debug-mode: false

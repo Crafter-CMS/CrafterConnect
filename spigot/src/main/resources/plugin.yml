@@ -1,0 +1,19 @@
+name: CrafterConnect
+version: 1.0.0
+main: net.crafter.plugin.spigot.CrafterSpigotPlugin
+api-version: 1.20
+description: CrafterConnect satın alım delivery plugin
+author: crafter.net.tr
+softdepend: [PlaceholderAPI]
+
+commands:
+  crafter:
+    description: CrafterConnect yönetim komutu
+    usage: /crafter <status|reload>
+    permission: crafter.admin
+
+permissions:
+  crafter.admin:
+    description: CrafterConnect yönetim izni
+
+    default: op
