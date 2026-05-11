@@ -81,6 +81,15 @@ public class CrafterVelocityPlugin {
                 new CrafterVelocityCommand(this)
         );
 
+        // Update Checker
+        new net.crafter.plugin.core.UpdateChecker("1.0.0").checkForUpdates(latest -> {
+            logger.warn("====================================================");
+            logger.warn("A new version of CrafterConnect is available!");
+            logger.warn("Latest: {}", latest);
+            logger.warn("Download: https://github.com/Crafter-CMS/CrafterConnect/releases");
+            logger.warn("====================================================");
+        });
+
         logger.info("CrafterConnect active! Server ID: {}", crafterConfig.getServerId());
     }
 

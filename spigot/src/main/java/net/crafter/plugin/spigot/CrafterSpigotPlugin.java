@@ -64,6 +64,16 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
             }
         }
 
+        // Update Checker
+        new net.crafter.plugin.core.UpdateChecker(getDescription().getVersion()).checkForUpdates(latest -> {
+            getLogger().warning("====================================================");
+            getLogger().warning("A new version of CrafterConnect is available!");
+            getLogger().warning("Current: " + getDescription().getVersion());
+            getLogger().warning("Latest: " + latest);
+            getLogger().warning("Download: https://github.com/Crafter-CMS/CrafterConnect/releases");
+            getLogger().warning("====================================================");
+        });
+
         getLogger().info("CrafterConnect active! Server ID: " + crafterConfig.getServerId());
     }
 
