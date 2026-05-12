@@ -98,6 +98,9 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         if (playerManager != null) {
             playerManager.removePlayer(event.getPlayer().getName());
         }
+        if (wsClient != null) {
+            wsClient.onPlayerQuit(event.getPlayer().getName());
+        }
     }
 
     @Override

@@ -254,6 +254,16 @@ public class CrafterWebSocketClient extends WebSocketClient {
         sendEvent("player_join", data);
     }
 
+    public void onPlayerQuit(String username) {
+        sendPlayerLeft(username);
+    }
+
+    private void sendPlayerLeft(String username) {
+        JsonObject data = new JsonObject();
+        data.addProperty("username", username);
+        sendEvent("player_left", data);
+    }
+
     public void getProducts() {
         sendEvent("get_products", new JsonObject());
     }

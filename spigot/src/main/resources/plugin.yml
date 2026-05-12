@@ -1,5 +1,5 @@
 name: CrafterConnect
-version: 1.0.1
+version: 1.0.2
 main: net.crafter.plugin.spigot.CrafterSpigotPlugin
 api-version: 1.20
 description: CrafterConnect satın alım delivery plugin
