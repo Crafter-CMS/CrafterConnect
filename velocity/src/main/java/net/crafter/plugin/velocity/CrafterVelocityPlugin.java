@@ -30,7 +30,7 @@ import java.nio.file.Path;
 @Plugin(
         id = "crafter-connect",
         name = "CrafterConnect",
-        version = "1.0.2",
+        version = "1.0.3",
         description = "crafter.net.tr satın alım delivery plugin",
         url = "https://crafter.net.tr",
         authors = {"crafter.net.tr"}
@@ -83,7 +83,7 @@ public class CrafterVelocityPlugin {
         );
 
         // Update Checker
-        new net.crafter.plugin.core.UpdateChecker("1.0.2").checkForUpdates(latest -> {
+        new net.crafter.plugin.core.UpdateChecker("1.0.3").checkForUpdates(latest -> {
             logger.warn("====================================================");
             logger.warn(languageManager.getMessage("new_version_available"));
             logger.warn(languageManager.getMessage("latest_version", latest));

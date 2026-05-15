@@ -16,8 +16,8 @@ CrafterConnect, oyuncuları sunucuya giriş yaptıkları **kullanıcı isimleri 
 
 ### 1. Eklentiyi Yükleme
 
-- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.0.jar` dosyasını `plugins/` klasörüne kopyalayın.
-- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.0.jar` dosyasını `plugins/` klasörüne kopyalayın.
+- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.3.jar` dosyasını `plugins/` klasörüne kopyalayın.
+- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.3.jar` dosyasını `plugins/` klasörüne kopyalayın.
 
 ### 2. Yapılandırma (Config)
 
@@ -34,13 +34,13 @@ use-ssl: true # SSL kullanıyorsanız true (api.crafter.net.tr için zorunlu)
 
 ### 3. Komutlar ve Yetkiler
 
-| Komut | Yetki | Açıklama |
-| :--- | :--- | :--- |
-| `/crafter magaza` | `crafter.shop` | Web sitenizdeki ürünleri oyun içinde kategori bazlı görüntüler. |
-| `/crafter magaza <categoryId>` | `crafter.shop` | Doğrudan belirli bir kategoriyi açar. |
-| `/crafter sandik` | `crafter.chest` | Satın aldığınız ama henüz teslim almadığınız eşyaları listeler. |
-| `/crafter status` | `crafter.admin` | WebSocket bağlantı durumunu ve bekleyen komutları gösterir. |
-| `/crafter reload` | `crafter.admin` | Yapılandırmayı ve dil dosyalarını yeniler. |
+| Komut                          | Yetki           | Açıklama                                                        |
+| :----------------------------- | :-------------- | :-------------------------------------------------------------- |
+| `/crafter magaza`              | `crafter.shop`  | Web sitenizdeki ürünleri oyun içinde kategori bazlı görüntüler. |
+| `/crafter magaza <categoryId>` | `crafter.shop`  | Doğrudan belirli bir kategoriyi açar.                           |
+| `/crafter sandik`              | `crafter.chest` | Satın aldığınız ama henüz teslim almadığınız eşyaları listeler. |
+| `/crafter status`              | `crafter.admin` | WebSocket bağlantı durumunu ve bekleyen komutları gösterir.     |
+| `/crafter reload`              | `crafter.admin` | Yapılandırmayı ve dil dosyalarını yeniler.                      |
 
 > [!NOTE]
 > Varsayılan olarak tüm oyunculara yetki vermek isterseniz, LuckPerms gibi bir plugin ile `crafter.shop` ve `crafter.chest` yetkilerini `default` grubuna ekleyebilirsiniz.
@@ -62,21 +62,22 @@ Eklentimiz PlaceholderAPI (PAPI) ile tam entegre çalışır. Bu sayede web site
 
 ### Kullanılabilir Placeholderlar
 
-| Placeholder | Açıklama | Örnek Çıktı |
-| :--- | :--- | :--- |
-| `%crafterconnect_balance%` | Oyuncunun güncel kredisi | `150.00 Balance` |
-| `%crafterconnect_role%` | Oyuncunun web sitesindeki rolü | `VIP` veya `Ziyaretçi` |
-| `%crafterconnect_user_id%` | Oyuncunun benzersiz ID'si | `839f27e4-...` |
-| `%crafterconnect_total_users%` | Sitedeki toplam kayıtlı üye | `1,245` |
-| `%crafterconnect_last_purchase_user%` | Son alışveriş yapan kişi | `efesoroglu` |
-| `%crafterconnect_last_purchase_product%` | Son satın alınan ürün adı | `VIP+ Paketi` |
-| `%crafterconnect_top_loader_user%` | En çok kredi yükleyen kişi | `Ahmet123` |
-| `%crafterconnect_top_loader_amount%` | En çok yüklenen miktar | `500.00` |
+| Placeholder                              | Açıklama                       | Örnek Çıktı            |
+| :--------------------------------------- | :----------------------------- | :--------------------- |
+| `%crafterconnect_balance%`               | Oyuncunun güncel kredisi       | `150.00 Balance`       |
+| `%crafterconnect_role%`                  | Oyuncunun web sitesindeki rolü | `VIP` veya `Ziyaretçi` |
+| `%crafterconnect_user_id%`               | Oyuncunun benzersiz ID'si      | `839f27e4-...`         |
+| `%crafterconnect_total_users%`           | Sitedeki toplam kayıtlı üye    | `1,245`                |
+| `%crafterconnect_last_purchase_user%`    | Son alışveriş yapan kişi       | `efesoroglu`           |
+| `%crafterconnect_last_purchase_product%` | Son satın alınan ürün adı      | `VIP+ Paketi`          |
+| `%crafterconnect_top_loader_user%`       | En çok kredi yükleyen kişi     | `Ahmet123`             |
+| `%crafterconnect_top_loader_amount%`     | En çok yüklenen miktar         | `500.00`               |
 
 > [!TIP]
 > Bakiye formatı ve varsayılan metinler (Ziyaretçi vb.) `lang/tr.yml` içerisinden tamamen özelleştirilebilir.
 
 ### Nasıl Kullanılır?
+
 1. Sunucunuzda **PlaceholderAPI** eklentisinin yüklü olduğundan emin olun.
 2. CrafterConnect yüklendiğinde otomatik olarak PAPI'ye kayıt olacaktır.
 3. Herhangi bir uyumlu eklentide (örn: DeluxeMenus, TAB, FeatherBoard) yukarıdaki değişkenleri kullanmaya başlayabilirsiniz.
