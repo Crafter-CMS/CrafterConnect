@@ -16,8 +16,8 @@ CrafterConnect, oyuncuları sunucuya giriş yaptıkları **kullanıcı isimleri 
 
 ### 1. Eklentiyi Yükleme
 
-- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.3.jar` dosyasını `plugins/` klasörüne kopyalayın.
-- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.3.jar` dosyasını `plugins/` klasörüne kopyalayın.
+- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.4.jar` dosyasını `plugins/` klasörüne kopyalayın.
+- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.4.jar` dosyasını `plugins/` klasörüne kopyalayın.
 
 ### 2. Yapılandırma (Config)
 

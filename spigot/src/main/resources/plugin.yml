@@ -1,5 +1,5 @@
 name: CrafterConnect
-version: 1.0.3
+version: 1.0.4
 main: net.crafter.plugin.spigot.CrafterSpigotPlugin
 api-version: '1.18'
 description: CrafterConnect satın alım delivery plugin
@@ -10,7 +10,6 @@ commands:
   crafter:
     description: CrafterConnect yönetim komutu
     usage: /crafter <status|reload>
-    permission: crafter.admin
 
 permissions:
   crafter.admin:
