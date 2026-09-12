@@ -8,8 +8,11 @@ messages:
   status_title: "§fSunucu Durumu:"
   status_connected: "§aBAĞLI"
   status_disconnected: "§cBAĞLI DEĞİL"
+  status_not_configured: "§eYAPILANDIRILMAMIŞ (velocity-config.yml düzenleyin)"
   status_info_line: " §7» §fDurum: {0}"
   status_queue_line: " §7» §fBekleyen Komutlar: §e{0}"
+  version_expired: "§cKullandığınız sürüm zaman aşımına uğradı! Lütfen eklentiyi en son sürüme ({0}) güncelleyin: §ehttps://github.com/Crafter-CMS/CrafterConnect/releases"
+  version_warning: "§eYeni bir sürüm mevcut ({0})! Yakında kullandığınız sürüm zaman aşımına uğrayacaktır."
   
   gui_category_name: "§6{0}"
   gui_product_name: "§e{0}"

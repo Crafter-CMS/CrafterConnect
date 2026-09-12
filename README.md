@@ -16,8 +16,8 @@ CrafterConnect, oyuncuları sunucuya giriş yaptıkları **kullanıcı isimleri 
 
 ### 1. Eklentiyi Yükleme
 
-- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.4.jar` dosyasını `plugins/` klasörüne kopyalayın.
-- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.4.jar` dosyasını `plugins/` klasörüne kopyalayın.
+- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.5.jar` dosyasını `plugins/` klasörüne kopyalayın.
+- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.5.jar` dosyasını `plugins/` klasörüne kopyalayın.
 
 ### 2. Yapılandırma (Config)
 
@@ -26,7 +26,7 @@ CrafterConnect, oyuncuları sunucuya giriş yaptıkları **kullanıcı isimleri 
 ```yaml
 api-url: "api.crafter.net.tr"
 website-id: "YOUR_WEBSITE_ID"
-plugin-secret: "YOUR_SECRET_KEY"
+plugin-secret: "YOUR_PLUGIN_SECRET"
 server-id: "YOUR_SERVER_ID"
 language: "tr" # tr veya en
 use-ssl: true # SSL kullanıyorsanız true (api.crafter.net.tr için zorunlu)

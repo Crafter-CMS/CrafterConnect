@@ -27,7 +27,7 @@ public class CrafterPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getVersion() {
-        return "1.0.2";
+        return "1.0.5";
     }
 
     @Override
@@ -37,28 +37,34 @@ public class CrafterPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
-        StatisticsData stats = plugin.getStatsManager().getStats();
-        if (stats == null) return "";
-
         switch (params.toLowerCase()) {
             case "total_users" -> {
-                return String.valueOf(stats.getTotalUsers());
+                StatisticsData stats = plugin.getStatsManager().getStats();
+                return stats != null ? String.valueOf(stats.getTotalUsers()) : "0";
             }
             case "last_purchase_user" -> {
+                StatisticsData stats = plugin.getStatsManager().getStats();
+                if (stats == null || stats.getLatest() == null) return "-";
                 List<StatisticsData.Purchase> purchases = stats.getLatest().getPurchases();
-                return purchases.isEmpty() ? "-" : purchases.get(0).getUsername();
+                return (purchases != null && !purchases.isEmpty()) ? purchases.get(0).getUsername() : "-";
             }
             case "last_purchase_product" -> {
+                StatisticsData stats = plugin.getStatsManager().getStats();
+                if (stats == null || stats.getLatest() == null) return "-";
                 List<StatisticsData.Purchase> purchases = stats.getLatest().getPurchases();
-                return purchases.isEmpty() ? "-" : purchases.get(0).getProductName();
+                return (purchases != null && !purchases.isEmpty()) ? purchases.get(0).getProductName() : "-";
             }
             case "top_loader_user" -> {
+                StatisticsData stats = plugin.getStatsManager().getStats();
+                if (stats == null) return "-";
                 List<StatisticsData.TopLoader> top = stats.getTopCreditLoaders();
-                return top.isEmpty() ? "-" : top.get(0).getUsername();
+                return (top != null && !top.isEmpty()) ? top.get(0).getUsername() : "-";
             }
             case "top_loader_amount" -> {
+                StatisticsData stats = plugin.getStatsManager().getStats();
+                if (stats == null) return "0";
                 List<StatisticsData.TopLoader> top = stats.getTopCreditLoaders();
-                return top.isEmpty() ? "0" : String.valueOf(top.get(0).getTotalAmount());
+                return (top != null && !top.isEmpty()) ? String.valueOf(top.get(0).getTotalAmount()) : "0";
             }
             case "balance" -> {
                 if (player == null) return "0.00";
@@ -75,6 +81,11 @@ public class CrafterPlaceholderExpansion extends PlaceholderExpansion {
                 if (player == null) return plugin.getLanguageManager().getMessage("placeholder_na");
                 net.crafter.plugin.core.model.PlayerData data = plugin.getPlayerManager().getPlayerData(player.getName());
                 return (data != null && data.getId() != null) ? data.getId() : plugin.getLanguageManager().getMessage("placeholder_na");
+            }
+            case "chest_count" -> {
+                if (player == null) return "0";
+                List<net.crafter.plugin.core.model.ChestItem> chest = plugin.getMarketManager().getPlayerChest(player.getName());
+                return chest != null ? String.valueOf(chest.size()) : "0";
             }
         }
 

@@ -31,6 +31,9 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     private net.crafter.plugin.core.LanguageManager languageManager;
     private final java.util.Set<String> pendingShopPlayers = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
+    private volatile boolean isExpired = false;
+    private volatile net.crafter.plugin.core.UpdateCheckResult updateResult = null;
+
     @Override
     public void onEnable() {
         getLogger().info("=== CrafterConnect (Spigot) is starting ===");
@@ -44,6 +47,14 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         playerManager = new net.crafter.plugin.core.PlayerManager();
         marketManager = new net.crafter.plugin.core.MarketManager();
         marketManager.setOnUpdate(this::onMarketUpdate);
+        marketManager.setOnChestUpdate((username, items) -> {
+            getServer().getScheduler().runTask(this, () -> {
+                Player p = getServer().getPlayerExact(username);
+                if (p != null && p.getOpenInventory() != null && p.getOpenInventory().getTopInventory().getHolder() instanceof net.crafter.plugin.spigot.menu.ChestMenu chestMenu) {
+                    chestMenu.refresh();
+                }
+            });
+        });
         menuManager = new net.crafter.plugin.spigot.menu.MenuManager();
         
         loadLanguage();
@@ -64,17 +75,37 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
             }
         }
 
-        // Update Checker
-        new net.crafter.plugin.core.UpdateChecker(getDescription().getVersion()).checkForUpdates(latest -> {
-            getLogger().warning("====================================================");
-            getLogger().warning(languageManager.getMessage("new_version_available"));
-            getLogger().warning(languageManager.getMessage("current_version", getDescription().getVersion()));
-            getLogger().warning(languageManager.getMessage("latest_version", latest));
-            getLogger().warning(languageManager.getMessage("download_url", "https://github.com/Crafter-CMS/CrafterConnect/releases"));
-            getLogger().warning("====================================================");
-        });
+        // Update Checker & Expiration Check (İlk kontrol ve 6 saatte bir periyodik kontrol)
+        runUpdateCheck();
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::runUpdateCheck, 20L * 60 * 60 * 6, 20L * 60 * 60 * 6);
 
         getLogger().info("CrafterConnect active! Server ID: " + crafterConfig.getServerId());
+    }
+
+    private void runUpdateCheck() {
+        new net.crafter.plugin.core.UpdateChecker(getDescription().getVersion()).checkForUpdates(result -> {
+            this.updateResult = result;
+            if (result.hasUpdate()) {
+                if (result.isExpired()) {
+                    this.isExpired = true;
+                    if (wsClient != null) {
+                        wsClient.shutdown();
+                    }
+                    getLogger().severe("====================================================");
+                    getLogger().severe("[CrafterConnect] KRİTİK HATA: Kullandığınız sürüm zaman aşımına uğradı!");
+                    getLogger().severe("[CrafterConnect] En son sürüm: " + result.getLatestVersion());
+                    getLogger().severe("[CrafterConnect] Eklenti devre dışı bırakıldı. Lütfen yeni sürümü indirin:");
+                    getLogger().severe("[CrafterConnect] " + result.getDownloadUrl());
+                    getLogger().severe("====================================================");
+                } else {
+                    getLogger().warning("====================================================");
+                    getLogger().warning("[CrafterConnect] DİKKAT: Yeni bir sürüm mevcut (" + result.getLatestVersion() + ")!");
+                    getLogger().warning("[CrafterConnect] Yakında kullandığınız sürüm zaman aşımına uğrayacaktır.");
+                    getLogger().warning("[CrafterConnect] İndirme adresi: " + result.getDownloadUrl());
+                    getLogger().warning("====================================================");
+                }
+            }
+        });
     }
 
     @Override
@@ -87,9 +118,21 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+
+        // Admin bilgilendirme
+        if (player.hasPermission("crafter.admin")) {
+            if (isExpired) {
+                String latest = updateResult != null ? updateResult.getLatestVersion() : "";
+                player.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("version_expired", latest));
+            } else if (updateResult != null && updateResult.hasUpdate()) {
+                player.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("version_warning", updateResult.getLatestVersion()));
+            }
+        }
+
         // Oyuncu girince offline kuyruğunu kontrol et ve backend'e bildir
-        if (wsClient != null) {
-            wsClient.onPlayerJoin(event.getPlayer().getName());
+        if (!isExpired && wsClient != null) {
+            wsClient.onPlayerJoin(player.getName());
         }
     }
 
@@ -98,7 +141,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         if (playerManager != null) {
             playerManager.removePlayer(event.getPlayer().getName());
         }
-        if (wsClient != null) {
+        if (!isExpired && wsClient != null) {
             wsClient.onPlayerQuit(event.getPlayer().getName());
         }
     }
@@ -107,6 +150,12 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("crafter")) return false;
         
+        if (isExpired) {
+            String latest = updateResult != null ? updateResult.getLatestVersion() : "";
+            sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("version_expired", latest));
+            return true;
+        }
+
         if (args.length == 0) {
             sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("usage"));
             return true;
@@ -118,10 +167,14 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
                     sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("no_permission"));
                     return true;
                 }
-                boolean connected = wsClient != null && wsClient.isConnected();
                 sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("status_title"));
-                sender.sendMessage(languageManager.getMessage("status_info_line", (connected ? languageManager.getMessage("status_connected") : languageManager.getMessage("status_disconnected"))));
-                sender.sendMessage(languageManager.getMessage("status_queue_line", (wsClient != null ? wsClient.getOfflineQueueSize() : 0)));
+                if (!crafterConfig.isConfigured()) {
+                    sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("status_info_line", languageManager.getMessage("status_not_configured")));
+                } else {
+                    boolean connected = wsClient != null && wsClient.isConnected();
+                    sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("status_info_line", (connected ? languageManager.getMessage("status_connected") : languageManager.getMessage("status_disconnected"))));
+                    sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("status_queue_line", (wsClient != null ? wsClient.getOfflineQueueSize() : 0)));
+                }
             }
             case "reload" -> {
                 if (!sender.hasPermission("crafter.admin")) {
@@ -183,14 +236,14 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     private CrafterConfig loadCrafterConfig() {
         CrafterConfig cfg = new CrafterConfig();
         cfg.setApiUrl(getConfig().getString("api-url", "api.crafter.net.tr"));
-        cfg.setWebsiteId(getConfig().getString("website-id", "YOUR_WEBSITE_ID"));
-        cfg.setPluginSecret(getConfig().getString("plugin-secret", "YOUR_SECRET"));
-        cfg.setServerId(getConfig().getString("server-id", "my-server-1"));
+        cfg.setWebsiteId(getConfig().getString("website-id", CrafterConfig.DEFAULT_WEBSITE_ID));
+        cfg.setPluginSecret(getConfig().getString("plugin-secret", CrafterConfig.DEFAULT_PLUGIN_SECRET));
+        cfg.setServerId(getConfig().getString("server-id", CrafterConfig.DEFAULT_SERVER_ID));
         cfg.setLanguage(getConfig().getString("language", "tr"));
         cfg.setReconnectDelaySeconds(getConfig().getInt("reconnect-delay-seconds", 5));
         cfg.setMaxReconnectAttempts(getConfig().getInt("max-reconnect-attempts", -1));
         cfg.setPingIntervalSeconds(getConfig().getInt("ping-interval-seconds", 30));
-        cfg.setDebug(getConfig().getBoolean("debug", false));
+        cfg.setDebug(getConfig().getBoolean("debug-mode", getConfig().getBoolean("debug", false)));
         cfg.setUseSsl(getConfig().getBoolean("use-ssl", true));
         return cfg;
     }
@@ -233,5 +286,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     public net.crafter.plugin.core.PlayerManager getPlayerManager() { return playerManager; }
     public net.crafter.plugin.core.MarketManager getMarketManager() { return marketManager; }
     public CrafterWebSocketClient getWsClient() { return wsClient; }
+    public boolean isExpired() { return isExpired; }
+    public net.crafter.plugin.core.UpdateCheckResult getUpdateResult() { return updateResult; }
 
 }

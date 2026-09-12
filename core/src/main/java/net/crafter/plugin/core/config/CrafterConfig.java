@@ -6,17 +6,21 @@ package net.crafter.plugin.core.config;
  */
 public class CrafterConfig {
 
+    public static final String DEFAULT_WEBSITE_ID = "YOUR_WEBSITE_ID";
+    public static final String DEFAULT_PLUGIN_SECRET = "YOUR_PLUGIN_SECRET";
+    public static final String DEFAULT_SERVER_ID = "YOUR_SERVER_ID";
+
     /** API Base URL (örn: localhost veya api.crafter.net.tr) */
-    private String apiUrl = "localhost:3000";
+    private String apiUrl = "api.crafter.net.tr";
 
     /** Website ID (dashboard'dan alınır) */
-    private String websiteId = "YOUR_WEBSITE_ID";
+    private String websiteId = DEFAULT_WEBSITE_ID;
 
     /** Plugin Secret (dashboard'dan alınan güvenlik anahtarı) */
-    private String pluginSecret = "YOUR_SECRET";
+    private String pluginSecret = DEFAULT_PLUGIN_SECRET;
 
     /** Bu sunucunun benzersiz ID'si (dashboard ile eşleşmeli) */
-    private String serverId = "my-server-1";
+    private String serverId = DEFAULT_SERVER_ID;
 
     /** Eklenti dili (tr, en, vb.) */
     private String language = "tr";
@@ -67,5 +71,27 @@ public class CrafterConfig {
 
     public boolean isUseSsl() { return useSsl; }
     public void setUseSsl(boolean useSsl) { this.useSsl = useSsl; }
+
+    /**
+     * Yapılandırmanın geçerli (kullanıcı tarafından girilmiş) olup olmadığını kontrol eder.
+     * Varsayılan yer tutucular ("YOUR_...") veya boş değerler varsa false döner.
+     */
+    public boolean isConfigured() {
+        return isValidValue(websiteId, DEFAULT_WEBSITE_ID)
+                && isValidValue(pluginSecret, DEFAULT_PLUGIN_SECRET, "YOUR_SECRET", "YOUR_SECRET_KEY")
+                && isValidValue(serverId, DEFAULT_SERVER_ID, "my-server-1", "my-proxy-1");
+    }
+
+    private static boolean isValidValue(String val, String defaultVal, String... legacyDefaults) {
+        if (val == null) return false;
+        String trimmed = val.trim();
+        if (trimmed.isEmpty()) return false;
+        if (trimmed.equalsIgnoreCase(defaultVal)) return false;
+        if (trimmed.toUpperCase().startsWith("YOUR_")) return false;
+        for (String legacy : legacyDefaults) {
+            if (trimmed.equalsIgnoreCase(legacy)) return false;
+        }
+        return true;
+    }
 }
 

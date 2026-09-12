@@ -10,10 +10,10 @@ api-url: "api.crafter.net.tr"
 website-id: "YOUR_WEBSITE_ID"
 
 # Plugin Secret (dashboard'dan alınan güvenlik anahtarı)
-plugin-secret: "YOUR_SECRET"
+plugin-secret: "YOUR_PLUGIN_SECRET"
 
 # Proxy sunucusu için ID (dashboard ile eşleşmeli)
-server-id: "my-proxy-1"
+server-id: "YOUR_SERVER_ID"
 
 reconnect-delay-seconds: 5
 max-reconnect-attempts: -1

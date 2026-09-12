@@ -11,7 +11,9 @@ import net.crafter.plugin.core.model.PendingCommand;
 import net.crafter.plugin.core.StatisticsManager;
 import net.crafter.plugin.core.MarketManager;
 import net.crafter.plugin.core.model.*;
+import org.java_websocket.WebSocket;
 import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.framing.Framedata;
 import org.java_websocket.handshake.ServerHandshake;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +42,9 @@ public class CrafterWebSocketClient extends WebSocketClient {
     private ScheduledExecutorService scheduler;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+    private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
+    private volatile long lastReceivedTimestamp = System.currentTimeMillis();
+    private ScheduledFuture<?> reconnectFuture = null;
 
     // Oyuncu offline ise bekletilen komutlar (player → komut listesi)
     private final ConcurrentHashMap<String, ConcurrentLinkedQueue<PendingCommand>> offlineQueue
@@ -54,6 +59,11 @@ public class CrafterWebSocketClient extends WebSocketClient {
         this.marketManager = marketManager;
         this.languageManager = languageManager;
         this.gson = new GsonBuilder().create();
+
+        // Otomatik bağlantı kaybı kontrolü (25 saniye)
+        // Belirli aralıklarla RFC 6455 Ping gönderir, Pong gelmezse soketi kapatıp onClose tetikler.
+        setConnectionLostTimeout(25);
+        setTcpNoDelay(true);
     }
 
     private static URI createURI(CrafterConfig config) {
@@ -68,6 +78,16 @@ public class CrafterWebSocketClient extends WebSocketClient {
     }
 
     public void start() {
+        if (!config.isConfigured()) {
+            log.warn("================================================================");
+            log.warn("[CrafterConnect] Eklenti henüz yapılandırılmamış (varsayılan config)!");
+            log.warn("[CrafterConnect] Lütfen config.yml dosyasındaki 'website-id', 'plugin-secret'");
+            log.warn("[CrafterConnect] ve 'server-id' alanlarını dashboard bilgilerinizle doldurun.");
+            log.warn("[CrafterConnect] WebSocket bağlantı denemeleri yapılmayacaktır.");
+            log.warn("================================================================");
+            return;
+        }
+
         running.set(true);
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "crafter-ws-scheduler");
@@ -76,26 +96,45 @@ public class CrafterWebSocketClient extends WebSocketClient {
         });
         
         log.info("[CrafterConnect] Initializing WebSocket connection...");
-        connect();
+        try {
+            connect();
+        } catch (Exception e) {
+            log.error("[CrafterConnect] Failed to initiate connection: {}", e.getMessage());
+            scheduleReconnect();
+        }
         
-        // Ping görevi
-        scheduler.scheduleAtFixedRate(this::sendPingPacket, 30, 30, TimeUnit.SECONDS);
+        // Watchdog & Heartbeat görevi (her 15 saniyede bir soket durumunu kontrol eder)
+        scheduler.scheduleWithFixedDelay(this::runWatchdog, 15, 15, TimeUnit.SECONDS);
     }
 
     public void shutdown() {
         running.set(false);
-        if (scheduler != null) scheduler.shutdownNow();
-        close();
+        isReconnecting.set(false);
+        cancelReconnectFuture();
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
+        }
+        try {
+            close();
+        } catch (Exception ignored) {}
     }
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         log.info("[CrafterConnect] WebSocket connection established. [OK]");
         reconnectAttempts.set(0);
+        isReconnecting.set(false);
+        lastReceivedTimestamp = System.currentTimeMillis();
+        cancelReconnectFuture();
+
+        // Yeniden bağlantıda online oyuncuları backend'e senkronize et
+        syncOnlinePlayers();
     }
 
     @Override
     public void onMessage(String message) {
+        lastReceivedTimestamp = System.currentTimeMillis();
         if (config.isDebug()) {
             log.info("[CrafterConnect] Incoming Message: {}", message);
         }
@@ -109,9 +148,21 @@ public class CrafterWebSocketClient extends WebSocketClient {
     }
 
     @Override
+    public void onWebsocketPing(WebSocket conn, Framedata f) {
+        super.onWebsocketPing(conn, f);
+        lastReceivedTimestamp = System.currentTimeMillis();
+    }
+
+    @Override
+    public void onWebsocketPong(WebSocket conn, Framedata f) {
+        super.onWebsocketPong(conn, f);
+        lastReceivedTimestamp = System.currentTimeMillis();
+    }
+
+    @Override
     public void onClose(int code, String reason, boolean remote) {
-        if (running.get()) {
-            log.warn("[CrafterConnect] Connection closed (Code: {}, Reason: {}). Reconnecting...", code, reason);
+        if (running.get() && config.isConfigured()) {
+            log.warn("[CrafterConnect] Connection closed (Code: {}, Reason: {}, Remote: {}). Reconnecting...", code, reason, remote);
             scheduleReconnect();
         }
     }
@@ -119,6 +170,9 @@ public class CrafterWebSocketClient extends WebSocketClient {
     @Override
     public void onError(Exception ex) {
         log.error("[CrafterConnect] WebSocket error: {}", ex.getMessage());
+        if (running.get() && config.isConfigured() && !isOpen()) {
+            scheduleReconnect();
+        }
     }
 
     private void handleMessage(CrafterMessage message) {
@@ -126,7 +180,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         if (type == null) return;
 
         switch (type.toLowerCase()) {
-            case "auth_ok" -> log.info("[CrafterConnect] Authentication successful! [OK]");
+            case "auth_ok", "auth_success" -> log.info("[CrafterConnect] Authentication successful! [OK]");
             case "auth_fail" -> log.error("[CrafterConnect] Authentication failed! Please check your config.");
             case "command" -> handleCommand(message);
             case "statistics" -> handleStatistics(message);
@@ -194,37 +248,139 @@ public class CrafterWebSocketClient extends WebSocketClient {
 
     private void sendPingPacket() {
         if (isOpen()) {
-            send(gson.toJson(new CrafterMessage(MessageType.PING, null)));
+            try {
+                send(gson.toJson(new CrafterMessage(MessageType.PING, null)));
+            } catch (Exception ignored) {}
         }
     }
 
     private void sendPong() {
         if (isOpen()) {
-            send(gson.toJson(new CrafterMessage(MessageType.PONG, null)));
+            try {
+                send(gson.toJson(new CrafterMessage(MessageType.PONG, null)));
+            } catch (Exception ignored) {}
         }
     }
 
     private void sendAck(String commandId) {
         if (isOpen()) {
-            JsonObject payload = new JsonObject();
-            payload.addProperty("commandId", commandId);
-            send(gson.toJson(new CrafterMessage(MessageType.ACK, payload)));
+            try {
+                JsonObject payload = new JsonObject();
+                payload.addProperty("commandId", commandId);
+                send(gson.toJson(new CrafterMessage(MessageType.ACK, payload)));
+            } catch (Exception e) {
+                log.error("[CrafterConnect] Failed to send ack for command {}: {}", commandId, e.getMessage());
+            }
         }
     }
 
-    private void scheduleReconnect() {
-        if (!running.get()) return;
+    private void runWatchdog() {
+        if (!running.get() || !config.isConfigured()) return;
 
-        int delay = config.getReconnectDelaySeconds();
+        try {
+            if (isOpen()) {
+                long now = System.currentTimeMillis();
+                long elapsed = now - lastReceivedTimestamp;
+
+                // Protokol seviyesinde RFC 6455 Ping gönder (Keep-Alive)
+                try {
+                    sendPing();
+                } catch (Exception e) {
+                    if (config.isDebug()) {
+                        log.debug("[CrafterConnect] Failed to send protocol ping: {}", e.getMessage());
+                    }
+                }
+
+                // Eğer 60 saniyeden uzun süredir backend'den hiçbir veri veya ping/pong gelmemişse:
+                // Soket askıda/donmuş (half-open zombie) kabul edilir.
+                if (elapsed > 60_000) {
+                    log.warn("[CrafterConnect] Watchdog: No response from server for {}s (half-open connection). Resetting socket...", elapsed / 1000);
+                    try {
+                        closeConnection(1006, "Watchdog timeout");
+                    } catch (Exception e) {
+                        try { close(); } catch (Exception ignored) {}
+                    }
+                    scheduleReconnect();
+                }
+            } else if (!isReconnecting.get()) {
+                log.warn("[CrafterConnect] Watchdog: Socket is closed and no reconnect is scheduled. Triggering reconnect...");
+                scheduleReconnect();
+            }
+        } catch (Throwable t) {
+            log.error("[CrafterConnect] Watchdog error: {}", t.getMessage());
+        }
+    }
+
+    private synchronized void scheduleReconnect() {
+        if (!running.get() || !config.isConfigured()) return;
+
+        if (isOpen()) {
+            isReconnecting.set(false);
+            return;
+        }
+
+        if (isReconnecting.get()) {
+            return;
+        }
+
+        isReconnecting.set(true);
+
+        int maxAttempts = config.getMaxReconnectAttempts();
         int attempts = reconnectAttempts.incrementAndGet();
 
-        log.info("[Crafter] Reconnecting in {} seconds (attempt #{})...", delay, attempts);
-        
-        scheduler.schedule(() -> {
-            if (running.get() && !isOpen()) {
-                reconnect();
+        if (maxAttempts > 0 && attempts > maxAttempts) {
+            log.error("[CrafterConnect] Reconnect aborted: maximum attempts ({}) reached.", maxAttempts);
+            isReconnecting.set(false);
+            return;
+        }
+
+        int baseDelay = Math.max(1, config.getReconnectDelaySeconds());
+        // Exponential backoff capped at 60 seconds
+        int delay = Math.min(baseDelay * Math.min(attempts, 12), 60);
+
+        log.info("[CrafterConnect] Reconnecting in {} seconds (attempt #{})...", delay, attempts);
+
+        cancelReconnectFuture();
+        if (scheduler == null || scheduler.isShutdown()) {
+            isReconnecting.set(false);
+            return;
+        }
+
+        reconnectFuture = scheduler.schedule(() -> {
+            try {
+                if (running.get() && config.isConfigured() && !isOpen()) {
+                    log.info("[CrafterConnect] Attempting to reconnect (attempt #{})...", attempts);
+                    reconnect();
+                }
+            } catch (Throwable t) {
+                log.error("[CrafterConnect] Reconnect attempt failed unexpectedly: {}", t.getMessage());
+            } finally {
+                if (!isOpen()) {
+                    isReconnecting.set(false);
+                    scheduleReconnect();
+                } else {
+                    isReconnecting.set(false);
+                }
             }
         }, delay, TimeUnit.SECONDS);
+    }
+
+    private synchronized void cancelReconnectFuture() {
+        if (reconnectFuture != null && !reconnectFuture.isDone()) {
+            reconnectFuture.cancel(false);
+            reconnectFuture = null;
+        }
+    }
+
+    private void syncOnlinePlayers() {
+        if (playerManager == null) return;
+        try {
+            for (String username : playerManager.getOnlineUsernames()) {
+                sendPlayerJoin(username);
+            }
+        } catch (Exception e) {
+            log.error("[CrafterConnect] Error synchronizing online players on reconnect: {}", e.getMessage());
+        }
     }
 
     public void onPlayerJoin(String username) {
@@ -319,6 +475,12 @@ public class CrafterWebSocketClient extends WebSocketClient {
         boolean success = payload.get("success").getAsBoolean();
         String msg = payload.get("message").getAsString();
         
+        if (success) {
+            // Satın alım sonrası hem sandığı hem de oyuncu bilgilerini (bakiye) anında tazele
+            getChest(username);
+            sendPlayerJoin(username);
+        }
+
         executor.handlePurchaseResponse(username, success, msg);
     }
 
@@ -340,11 +502,13 @@ public class CrafterWebSocketClient extends WebSocketClient {
         String msg = payload.get("message").getAsString();
         
         if (success) {
+            // Eşya kullanımı sonrası hem sandığı hem de oyuncu bilgilerini (bakiye/rol) anında tazele
+            getChest(username);
+            sendPlayerJoin(username);
+
             // Backend mesajı yerine dil dosyasındaki mesajı kullan
             executor.sendMessage(username, languageManager.getMessage("prefix") + 
                     languageManager.getMessage("item_used_success", msg)); 
-            // Refresh chest
-            getChest(username);
         } else {
             executor.sendMessage(username, languageManager.getMessage("prefix") + 
                     languageManager.getMessage("item_used_error", msg));

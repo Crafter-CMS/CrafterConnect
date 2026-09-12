@@ -28,6 +28,12 @@ public class CrafterVelocityCommand implements RawCommand {
             return;
         }
 
+        if (plugin.isExpired()) {
+            String latest = plugin.getUpdateResult() != null ? plugin.getUpdateResult().getLatestVersion() : "";
+            source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("version_expired", latest)));
+            return;
+        }
+
         if (args.isEmpty() || args.equals("help")) {
             source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("usage")));
             return;
@@ -35,10 +41,14 @@ public class CrafterVelocityCommand implements RawCommand {
 
         switch (args.toLowerCase()) {
             case "status" -> {
-                boolean connected = plugin.getWsClient() != null && plugin.getWsClient().isConnected();
                 source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_title")));
-                source.sendMessage(Component.text(lm.getMessage("status_info_line", (connected ? lm.getMessage("status_connected") : lm.getMessage("status_disconnected")))));
-                source.sendMessage(Component.text(lm.getMessage("status_queue_line", (plugin.getWsClient() != null ? plugin.getWsClient().getOfflineQueueSize() : 0))));
+                if (plugin.getCrafterConfig() == null || !plugin.getCrafterConfig().isConfigured()) {
+                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_info_line", lm.getMessage("status_not_configured"))));
+                } else {
+                    boolean connected = plugin.getWsClient() != null && plugin.getWsClient().isConnected();
+                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_info_line", (connected ? lm.getMessage("status_connected") : lm.getMessage("status_disconnected")))));
+                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_queue_line", (plugin.getWsClient() != null ? plugin.getWsClient().getOfflineQueueSize() : 0))));
+                }
             }
             case "reload" -> {
                 try {

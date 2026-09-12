@@ -22,4 +22,8 @@ public class PlayerManager {
             players.remove(username.toLowerCase());
         }
     }
+
+    public java.util.Set<String> getOnlineUsernames() {
+        return players.keySet();
+    }
 }

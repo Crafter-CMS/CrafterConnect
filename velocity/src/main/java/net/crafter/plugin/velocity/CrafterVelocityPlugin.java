@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
+import net.kyori.adventure.text.Component;
 
 /**
  * Velocity proxy plugin ana sınıfı.
@@ -30,7 +32,7 @@ import java.nio.file.Path;
 @Plugin(
         id = "crafter-connect",
         name = "CrafterConnect",
-        version = "1.0.4",
+        version = "1.0.5",
         description = "crafter.net.tr satın alım delivery plugin",
         url = "https://crafter.net.tr",
         authors = {"crafter.net.tr"}
@@ -47,6 +49,8 @@ public class CrafterVelocityPlugin {
     private net.crafter.plugin.core.PlayerManager playerManager;
     private net.crafter.plugin.core.MarketManager marketManager;
     private net.crafter.plugin.core.LanguageManager languageManager;
+    private volatile boolean isExpired = false;
+    private volatile net.crafter.plugin.core.UpdateCheckResult updateResult = null;
 
     @Inject
     public CrafterVelocityPlugin(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
@@ -82,16 +86,42 @@ public class CrafterVelocityPlugin {
                 new CrafterVelocityCommand(this)
         );
 
-        // Update Checker
-        new net.crafter.plugin.core.UpdateChecker("1.0.4").checkForUpdates(latest -> {
-            logger.warn("====================================================");
-            logger.warn(languageManager.getMessage("new_version_available"));
-            logger.warn(languageManager.getMessage("latest_version", latest));
-            logger.warn(languageManager.getMessage("download_url", "https://github.com/Crafter-CMS/CrafterConnect/releases"));
-            logger.warn("====================================================");
-        });
+        // Update Checker & Expiration Check (İlk kontrol ve 6 saatte bir periyodik kontrol)
+        runUpdateCheck();
+        server.getScheduler().buildTask(this, this::runUpdateCheck)
+                .repeat(6, TimeUnit.HOURS)
+                .schedule();
 
         logger.info("CrafterConnect active! Server ID: {}", crafterConfig.getServerId());
+    }
+
+    private void runUpdateCheck() {
+        String currentVer = server.getPluginManager().getPlugin("crafter-connect")
+                .flatMap(c -> c.getDescription().getVersion())
+                .orElse("1.0.5");
+        new net.crafter.plugin.core.UpdateChecker(currentVer).checkForUpdates(result -> {
+            this.updateResult = result;
+            if (result.hasUpdate()) {
+                if (result.isExpired()) {
+                    this.isExpired = true;
+                    if (wsClient != null) {
+                        wsClient.shutdown();
+                    }
+                    logger.error("====================================================");
+                    logger.error("[CrafterConnect] KRİTİK HATA: Kullandığınız sürüm zaman aşımına uğradı!");
+                    logger.error("[CrafterConnect] En son sürüm: {}", result.getLatestVersion());
+                    logger.error("[CrafterConnect] Eklenti devre dışı bırakıldı. Lütfen yeni sürümü indirin:");
+                    logger.error("[CrafterConnect] {}", result.getDownloadUrl());
+                    logger.error("====================================================");
+                } else {
+                    logger.warn("====================================================");
+                    logger.warn("[CrafterConnect] DİKKAT: Yeni bir sürüm mevcut ({})!", result.getLatestVersion());
+                    logger.warn("[CrafterConnect] Yakında kullandığınız sürüm zaman aşımına uğrayacaktır.");
+                    logger.warn("[CrafterConnect] İndirme adresi: {}", result.getDownloadUrl());
+                    logger.warn("====================================================");
+                }
+            }
+        });
     }
 
     @Subscribe
@@ -104,9 +134,19 @@ public class CrafterVelocityPlugin {
 
     @Subscribe
     public void onPostLogin(PostLoginEvent event) {
+        var player = event.getPlayer();
+        if (player.hasPermission("crafter.admin")) {
+            if (isExpired) {
+                String latest = updateResult != null ? updateResult.getLatestVersion() : "";
+                player.sendMessage(Component.text(languageManager.getMessage("prefix") + languageManager.getMessage("version_expired", latest)));
+            } else if (updateResult != null && updateResult.hasUpdate()) {
+                player.sendMessage(Component.text(languageManager.getMessage("prefix") + languageManager.getMessage("version_warning", updateResult.getLatestVersion())));
+            }
+        }
+
         // Oyuncu proxy'ye girince offline kuyruğunu kontrol et ve backend'e bildir
-        if (wsClient != null) {
-            wsClient.onPlayerJoin(event.getPlayer().getUsername());
+        if (!isExpired && wsClient != null) {
+            wsClient.onPlayerJoin(player.getUsername());
         }
     }
 
@@ -126,7 +166,7 @@ public class CrafterVelocityPlugin {
         if (playerManager != null) {
             playerManager.removePlayer(event.getPlayer().getUsername());
         }
-        if (wsClient != null) {
+        if (!isExpired && wsClient != null) {
             wsClient.onPlayerQuit(event.getPlayer().getUsername());
         }
     }
@@ -198,9 +238,9 @@ public class CrafterVelocityPlugin {
 
         CrafterConfig cfg = new CrafterConfig();
         cfg.setApiUrl(node.node("api-url").getString("api.crafter.net.tr"));
-        cfg.setWebsiteId(node.node("website-id").getString("YOUR_WEBSITE_ID"));
-        cfg.setPluginSecret(node.node("plugin-secret").getString("YOUR_SECRET"));
-        cfg.setServerId(node.node("server-id").getString("my-proxy-1"));
+        cfg.setWebsiteId(node.node("website-id").getString(net.crafter.plugin.core.config.CrafterConfig.DEFAULT_WEBSITE_ID));
+        cfg.setPluginSecret(node.node("plugin-secret").getString(net.crafter.plugin.core.config.CrafterConfig.DEFAULT_PLUGIN_SECRET));
+        cfg.setServerId(node.node("server-id").getString(net.crafter.plugin.core.config.CrafterConfig.DEFAULT_SERVER_ID));
         cfg.setLanguage(node.node("language").getString("tr"));
         cfg.setReconnectDelaySeconds(node.node("reconnect-delay-seconds").getInt(5));
         cfg.setMaxReconnectAttempts(node.node("max-reconnect-attempts").getInt(-1));
@@ -220,4 +260,6 @@ public class CrafterVelocityPlugin {
     public ProxyServer getServer() { return server; }
     public Logger getPluginLogger() { return logger; }
     public StatisticsManager getStatsManager() { return statsManager; }
+    public boolean isExpired() { return isExpired; }
+    public net.crafter.plugin.core.UpdateCheckResult getUpdateResult() { return updateResult; }
 }

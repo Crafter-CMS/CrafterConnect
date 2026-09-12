@@ -8,8 +8,11 @@ messages:
   status_title: "§fServer Status:"
   status_connected: "§aCONNECTED"
   status_disconnected: "§cDISCONNECTED"
+  status_not_configured: "§eNOT CONFIGURED (Check velocity-config.yml)"
   status_info_line: " §7» §fStatus: {0}"
   status_queue_line: " §7» §fPending Commands: §e{0}"
+  version_expired: "§cThe version you are using has expired! Please update the plugin to the latest version ({0}): §ehttps://github.com/Crafter-CMS/CrafterConnect/releases"
+  version_warning: "§eA new version is available ({0})! The version you are using will expire soon."
   
   gui_category_name: "§6{0}"
   gui_product_name: "§e{0}"

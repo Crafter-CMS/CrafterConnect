@@ -6,7 +6,7 @@
 
     <groupId>net.crafter</groupId>
     <artifactId>crafter-connect-parent</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <packaging>pom</packaging>
 
     <name>CrafterConnect Parent</name>
@@ -49,6 +49,14 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>${slf4j.version}</version>
+            </dependency>
+
+            <!-- Test -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>5.10.2</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -13,8 +13,10 @@ public class MarketManager {
     private final Map<String, List<ChestItem>> playerChests = new ConcurrentHashMap<>();
     private boolean isLoaded = false;
     private Runnable onUpdate;
+    private java.util.function.BiConsumer<String, List<ChestItem>> onChestUpdate;
 
     public void setOnUpdate(Runnable onUpdate) { this.onUpdate = onUpdate; }
+    public void setOnChestUpdate(java.util.function.BiConsumer<String, List<ChestItem>> onChestUpdate) { this.onChestUpdate = onChestUpdate; }
 
     public void updateMarket(List<Product> products, List<Category> categories) {
         this.products = products;
@@ -27,6 +29,9 @@ public class MarketManager {
 
     public void updatePlayerChest(String username, List<ChestItem> items) {
         playerChests.put(username.toLowerCase(), items);
+        if (onChestUpdate != null) {
+            onChestUpdate.accept(username, items);
+        }
     }
 
     public List<Product> getProducts() { return products; }
