@@ -46,9 +46,13 @@ public class CrafterWebSocketClient extends WebSocketClient {
     private volatile long lastReceivedTimestamp = System.currentTimeMillis();
     private ScheduledFuture<?> reconnectFuture = null;
 
-    // Oyuncu offline ise bekletilen komutlar (player → komut listesi)
-    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<PendingCommand>> offlineQueue
-            = new ConcurrentHashMap<>();
+    /** ACK'te komut id'si, kalıcı kuyruk ve tekilleştirme desteğini backend'e bildirir (#273) */
+    public static final int PROTOCOL_VERSION = 2;
+
+    // Oyuncu offline ise bekletilen komutlar ve çalıştırılmış komut id'leri.
+    // Varsayılan bellek içidir; platform eklentisi setCommandStore ile dosyaya bağlar.
+    private volatile net.crafter.plugin.core.PendingCommandStore commandStore =
+            new net.crafter.plugin.core.PendingCommandStore(null);
 
     public CrafterWebSocketClient(CrafterConfig config, CommandExecutor executor, StatisticsManager statsManager, net.crafter.plugin.core.PlayerManager playerManager, net.crafter.plugin.core.MarketManager marketManager, net.crafter.plugin.core.LanguageManager languageManager) {
         super(createURI(config));
@@ -68,13 +72,19 @@ public class CrafterWebSocketClient extends WebSocketClient {
 
     private static URI createURI(CrafterConfig config) {
         String protocol = config.isUseSsl() ? "wss" : "ws";
-        String url = String.format("%s://%s/website/plugin/wss?website-id=%s&plugin-secret=%s&server-id=%s",
+        String url = String.format("%s://%s/website/plugin/wss?website-id=%s&plugin-secret=%s&server-id=%s&protocol=%d",
                 protocol,
                 config.getApiUrl(),
                 config.getWebsiteId(),
                 config.getPluginSecret(),
-                config.getServerId());
+                config.getServerId(),
+                PROTOCOL_VERSION);
         return URI.create(url);
+    }
+
+    /** Kalıcı komut deposunu bağlar; start() öncesinde çağrılmalı. */
+    public void setCommandStore(net.crafter.plugin.core.PendingCommandStore store) {
+        if (store != null) this.commandStore = store;
     }
 
     public void start() {
@@ -229,20 +239,41 @@ public class CrafterWebSocketClient extends WebSocketClient {
 
         if (pc == null || pc.getCommand() == null) return;
 
+        String commandId = pc.getCommandId();
+        // Backend ACK alamayınca aynı id ile tekrar gönderir; ikinci kez çalıştırma, yalnızca ACK'i yinele
+        if (commandStore.isExecuted(commandId)) {
+            sendAck(commandId, "executed");
+            return;
+        }
+        if (commandStore.isQueued(commandId)) {
+            sendAck(commandId, "queued");
+            return;
+        }
+
         // Offline queue logic
         String targetPlayer = pc.getPlayer();
         if (targetPlayer != null && !targetPlayer.isBlank()) {
             if (!executor.isPlayerOnline(targetPlayer)) {
-                log.info("[CrafterConnect] Player {} is offline. Adding command to queue.", targetPlayer);
-                addToQueue(targetPlayer, pc);
+                log.info("[CrafterConnect] Target player is offline. Command {} saved to queue.", commandId);
+                commandStore.enqueue(targetPlayer, pc);
+                if (commandId != null) sendAck(commandId, "queued");
                 return; // Don't execute now
             }
         }
 
-        log.info("[CrafterConnect] Executing command: {}", pc.getCommand());
+        executeAndAck(pc);
+    }
+
+    private void executeAndAck(PendingCommand pc) {
+        String commandId = pc.getCommandId();
+        log.info("[CrafterConnect] Executing command {}", commandId);
         boolean success = executor.execute(pc);
-        if (success && pc.getCommandId() != null) {
-            sendAck(pc.getCommandId());
+        if (commandId == null) return;
+        if (success) {
+            commandStore.markExecuted(commandId);
+            sendAck(commandId, "executed");
+        } else {
+            sendNack(commandId, "execution_failed");
         }
     }
 
@@ -262,14 +293,28 @@ public class CrafterWebSocketClient extends WebSocketClient {
         }
     }
 
-    private void sendAck(String commandId) {
+    private void sendAck(String commandId, String status) {
         if (isOpen()) {
             try {
                 JsonObject payload = new JsonObject();
                 payload.addProperty("commandId", commandId);
+                payload.addProperty("status", status);
                 send(gson.toJson(new CrafterMessage(MessageType.ACK, payload)));
             } catch (Exception e) {
                 log.error("[CrafterConnect] Failed to send ack for command {}: {}", commandId, e.getMessage());
+            }
+        }
+    }
+
+    private void sendNack(String commandId, String reason) {
+        if (isOpen()) {
+            try {
+                JsonObject payload = new JsonObject();
+                payload.addProperty("commandId", commandId);
+                payload.addProperty("reason", reason);
+                send(gson.toJson(new CrafterMessage(MessageType.NACK, payload)));
+            } catch (Exception e) {
+                log.error("[CrafterConnect] Failed to send nack for command {}: {}", commandId, e.getMessage());
             }
         }
     }
@@ -390,16 +435,10 @@ public class CrafterWebSocketClient extends WebSocketClient {
         // Fetch chest content for the player initially
         getChest(username);
 
-        ConcurrentLinkedQueue<PendingCommand> queue = offlineQueue.remove(username);
-        if (queue != null) {
-            while (!queue.isEmpty()) {
-                PendingCommand pc = queue.poll();
-                if (pc != null) {
-                    boolean success = executor.execute(pc);
-                    if (success && pc.getCommandId() != null) {
-                        sendAck(pc.getCommandId());
-                    }
-                }
+        // Kuyruk anahtarı küçük harflidir; oyuncu hangi yazımla girerse girsin eşleşir
+        for (PendingCommand pc : commandStore.drain(username)) {
+            if (pc != null && !commandStore.isExecuted(pc.getCommandId())) {
+                executeAndAck(pc);
             }
         }
     }
@@ -515,12 +554,8 @@ public class CrafterWebSocketClient extends WebSocketClient {
         }
     }
 
-    private void addToQueue(String player, PendingCommand pc) {
-        offlineQueue.computeIfAbsent(player.toLowerCase(), k -> new ConcurrentLinkedQueue<>()).add(pc);
-    }
-
     public int getOfflineQueueSize() {
-        return offlineQueue.values().stream().mapToInt(ConcurrentLinkedQueue::size).sum();
+        return commandStore.size();
     }
 
     public boolean isConnected() {

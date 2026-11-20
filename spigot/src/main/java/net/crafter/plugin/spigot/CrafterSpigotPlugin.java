@@ -64,6 +64,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(menuManager, this);
         SpigotCommandExecutor executor = new SpigotCommandExecutor(this);
         wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
+        wsClient.setCommandStore(commandStore());
         wsClient.start();
 
         // PlaceholderAPI integration
@@ -188,6 +189,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
                     wsClient.shutdown();
                     SpigotCommandExecutor executor = new SpigotCommandExecutor(this);
                     wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
+                    wsClient.setCommandStore(commandStore());
                     wsClient.start();
                     sender.sendMessage(languageManager.getMessage("prefix") + languageManager.getMessage("reloaded"));
                 } catch (Exception e) {
@@ -289,4 +291,14 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     public boolean isExpired() { return isExpired; }
     public net.crafter.plugin.core.UpdateCheckResult getUpdateResult() { return updateResult; }
 
+
+    /** Çevrimdışı oyuncu komutlarının kalıcı deposu (#273); tek örnek, reload'da da korunur. */
+    private net.crafter.plugin.core.PendingCommandStore pendingCommandStore;
+
+    private synchronized net.crafter.plugin.core.PendingCommandStore commandStore() {
+        if (pendingCommandStore == null) {
+            pendingCommandStore = new net.crafter.plugin.core.PendingCommandStore(new File(getDataFolder(), "pending-commands.json").toPath());
+        }
+        return pendingCommandStore;
+    }
 }

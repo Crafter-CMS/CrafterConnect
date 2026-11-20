@@ -78,6 +78,7 @@ public class CrafterVelocityPlugin {
         
         VelocityCommandExecutor executor = new VelocityCommandExecutor(server, logger, this);
         wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
+        wsClient.setCommandStore(commandStore());
         wsClient.start();
 
         // Komut kaydı
@@ -158,6 +159,7 @@ public class CrafterVelocityPlugin {
         }
         VelocityCommandExecutor executor = new VelocityCommandExecutor(server, logger, this);
         wsClient = new CrafterWebSocketClient(crafterConfig, executor, statsManager, playerManager, marketManager, languageManager);
+        wsClient.setCommandStore(commandStore());
         wsClient.start();
     }
 
@@ -262,4 +264,14 @@ public class CrafterVelocityPlugin {
     public StatisticsManager getStatsManager() { return statsManager; }
     public boolean isExpired() { return isExpired; }
     public net.crafter.plugin.core.UpdateCheckResult getUpdateResult() { return updateResult; }
+
+    /** Çevrimdışı oyuncu komutlarının kalıcı deposu (#273); tek örnek, reload'da da korunur. */
+    private net.crafter.plugin.core.PendingCommandStore pendingCommandStore;
+
+    private synchronized net.crafter.plugin.core.PendingCommandStore commandStore() {
+        if (pendingCommandStore == null) {
+            pendingCommandStore = new net.crafter.plugin.core.PendingCommandStore(dataDirectory.resolve("pending-commands.json"));
+        }
+        return pendingCommandStore;
+    }
 }
