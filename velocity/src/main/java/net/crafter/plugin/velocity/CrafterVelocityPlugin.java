@@ -249,6 +249,8 @@ public class CrafterVelocityPlugin {
         cfg.setPingIntervalSeconds(node.node("ping-interval-seconds").getInt(30));
         cfg.setDebug(node.node("debug").getBoolean(false));
         cfg.setUseSsl(node.node("use-ssl").getBoolean(true));
+        cfg.setBedrockPlayerPrefix(node.node("bedrock-player-prefix").getString(""));
+        cfg.setAllowedCommandPrefixes(node.node("allowed-command-prefixes").getList(String.class, new java.util.ArrayList<>()));
 
         return cfg;
 

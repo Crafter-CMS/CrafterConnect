@@ -250,6 +250,9 @@ public class CrafterWebSocketClient extends WebSocketClient {
             return;
         }
 
+        // İkinci savunma hattı (TASK-286): geçersiz oyuncu adı, satır sonu veya izinsiz önek → çalıştırma, NACK
+        if (rejectByGuard(pc)) return;
+
         // Offline queue logic
         String targetPlayer = pc.getPlayer();
         if (targetPlayer != null && !targetPlayer.isBlank()) {
@@ -266,6 +269,8 @@ public class CrafterWebSocketClient extends WebSocketClient {
 
     private void executeAndAck(PendingCommand pc) {
         String commandId = pc.getCommandId();
+        // Kuyruktan gelen (eski sürümde kaydedilmiş) komutlar da aynı kontrolden geçer
+        if (rejectByGuard(pc)) return;
         log.info("[CrafterConnect] Executing command {}", commandId);
         boolean success = executor.execute(pc);
         if (commandId == null) return;
@@ -275,6 +280,19 @@ public class CrafterWebSocketClient extends WebSocketClient {
         } else {
             sendNack(commandId, "execution_failed");
         }
+    }
+
+    /** Komut güvenlik kontrolünden geçmezse NACK gönderir ve true döner. Komut ve oyuncu adı loglanmaz. */
+    private boolean rejectByGuard(PendingCommand pc) {
+        String reason = commandGuard().check(pc);
+        if (reason == null) return false;
+        log.warn("[CrafterConnect] Command {} rejected by command guard ({})", pc.getCommandId(), reason);
+        if (pc.getCommandId() != null) sendNack(pc.getCommandId(), reason);
+        return true;
+    }
+
+    private net.crafter.plugin.core.CommandGuard commandGuard() {
+        return new net.crafter.plugin.core.CommandGuard(config.getBedrockPlayerPrefix(), config.getAllowedCommandPrefixes());
     }
 
     private void sendPingPacket() {
