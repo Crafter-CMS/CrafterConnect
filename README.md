@@ -30,7 +30,11 @@ plugin-secret: "YOUR_PLUGIN_SECRET"
 server-id: "YOUR_SERVER_ID"
 language: "tr" # tr veya en
 use-ssl: true # SSL kullanıyorsanız true (api.crafter.net.tr için zorunlu)
+bedrock-player-prefix: "" # Floodgate öneki (örn. "."); boşsa yalnızca Java adları kabul edilir
+allowed-command-prefixes: [] # Doluysa yalnızca bu öneklerle başlayan komutlar çalışır (örn. ["lp user", "give"])
 ```
+
+Gelen komutlar çalıştırılmadan önce kontrol edilir: oyuncu adı Minecraft adı desenine (`[A-Za-z0-9_]{3,16}`) uymuyorsa ya da komut satır sonu içeriyorsa komut çalıştırılmaz ve backend'e NACK gönderilir.
 
 ### 3. Komutlar ve Yetkiler
 

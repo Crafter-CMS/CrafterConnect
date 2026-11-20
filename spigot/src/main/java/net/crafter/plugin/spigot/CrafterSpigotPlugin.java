@@ -247,6 +247,8 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         cfg.setPingIntervalSeconds(getConfig().getInt("ping-interval-seconds", 30));
         cfg.setDebug(getConfig().getBoolean("debug-mode", getConfig().getBoolean("debug", false)));
         cfg.setUseSsl(getConfig().getBoolean("use-ssl", true));
+        cfg.setBedrockPlayerPrefix(getConfig().getString("bedrock-player-prefix", ""));
+        cfg.setAllowedCommandPrefixes(getConfig().getStringList("allowed-command-prefixes"));
         return cfg;
     }
 

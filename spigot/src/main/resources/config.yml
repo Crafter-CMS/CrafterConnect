@@ -18,3 +18,13 @@ reconnect-delay-seconds: 5
 ping-interval-seconds: 30
 debug-mode: false
 use-ssl: true
+
+# Komut güvenliği (TASK-286)
+# Bedrock/Floodgate oyuncu adı öneki (tek karakter, örn. "."). Boşsa yalnızca Java adları kabul edilir.
+bedrock-player-prefix: ""
+# Boş değilse yalnızca bu öneklerle başlayan komutlar çalıştırılır; diğerleri reddedilir (NACK).
+# Örnek:
+# allowed-command-prefixes:
+#   - "lp user"
+#   - "give"
+allowed-command-prefixes: []

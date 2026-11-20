@@ -40,6 +40,12 @@ public class CrafterConfig {
     /** SSL/TLS kullanılsın mı? (wss://) */
     private boolean useSsl = true;
 
+    /** Bedrock/Floodgate oyuncu adı öneki (tek karakter, örn. "."); boşsa önek kabul edilmez */
+    private String bedrockPlayerPrefix = "";
+
+    /** Boş değilse yalnızca bu öneklerle başlayan komutlar çalıştırılır (TASK-286) */
+    private java.util.List<String> allowedCommandPrefixes = new java.util.ArrayList<>();
+
     // --- Getters & Setters ---
 
     public String getApiUrl() { return apiUrl; }
@@ -71,6 +77,16 @@ public class CrafterConfig {
 
     public boolean isUseSsl() { return useSsl; }
     public void setUseSsl(boolean useSsl) { this.useSsl = useSsl; }
+
+    public String getBedrockPlayerPrefix() { return bedrockPlayerPrefix; }
+    public void setBedrockPlayerPrefix(String bedrockPlayerPrefix) {
+        this.bedrockPlayerPrefix = bedrockPlayerPrefix == null ? "" : bedrockPlayerPrefix;
+    }
+
+    public java.util.List<String> getAllowedCommandPrefixes() { return allowedCommandPrefixes; }
+    public void setAllowedCommandPrefixes(java.util.List<String> allowedCommandPrefixes) {
+        this.allowedCommandPrefixes = allowedCommandPrefixes == null ? new java.util.ArrayList<>() : allowedCommandPrefixes;
+    }
 
     /**
      * Yapılandırmanın geçerli (kullanıcı tarafından girilmiş) olup olmadığını kontrol eder.
