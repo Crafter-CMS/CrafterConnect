@@ -1,18 +1,25 @@
 name: CrafterConnect
-version: 1.0.5
+version: '${project.version}'
 main: net.crafter.plugin.spigot.CrafterSpigotPlugin
 api-version: '1.18'
-description: CrafterConnect satın alım delivery plugin
-author: crafter.net.tr
-softdepend: [PlaceholderAPI]
+folia-supported: true
+description: Crafter store delivery, in-game shop and chest
+author: Crafter
+website: https://crafter.net.tr
+softdepend: [PlaceholderAPI, floodgate]
 
 commands:
   crafter:
-    description: CrafterConnect yönetim komutu
-    usage: /crafter <status|reload>
+    description: CrafterConnect
+    usage: /crafter <connect|disconnect|status|reload|magaza|sandik>
 
 permissions:
   crafter.admin:
-    description: CrafterConnect yönetim izni
-
+    description: CrafterConnect yönetimi (connect, disconnect, status, reload)
+    default: op
+  crafter.shop:
+    description: Oyun içi mağaza (/crafter magaza)
+    default: op
+  crafter.chest:
+    description: Sandık (/crafter sandik)
     default: op

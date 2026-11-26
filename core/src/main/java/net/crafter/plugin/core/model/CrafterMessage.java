@@ -25,6 +25,9 @@ public class CrafterMessage {
     private JsonObject payload;
     private JsonObject data; // For statistics type
     private String command; // New simple command format support
+    /** type:"error" mesajında hata kodu (server_token_invalid, LICENSE_ERROR …) */
+    private String code;
+    private String message;
 
     public CrafterMessage() {}
 
@@ -69,6 +72,14 @@ public class CrafterMessage {
         this.command = command;
     }
 
+    public String getCode() {
+        return code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
     /** Payload'dan güvenli string okuma */
     public String getPayloadString(String key) {
         if (payload == null || !payload.has(key)) return null;
@@ -83,7 +94,7 @@ public class CrafterMessage {
 
     @Override
     public String toString() {
-        return "CrafterMessage{type=" + getTypeString() + ", command=" + command + ", payload=" + payload + "}";
+        return "CrafterMessage{type=" + getTypeString() + "}";
     }
 }
 

@@ -1,69 +1,43 @@
 package net.crafter.plugin.velocity;
 
-import com.velocitypowered.api.command.RawCommand;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import com.velocitypowered.api.command.SimpleCommand;
+import net.crafter.plugin.core.AdminCommand;
+import net.crafter.plugin.core.CrafterConnectService;
 
-/**
- * /crafter komutu — Velocity versiyonu
- */
-public class CrafterVelocityCommand implements RawCommand {
+import java.util.List;
 
-    private final CrafterVelocityPlugin plugin;
+/** /crafter (Velocity): connect, disconnect, status, reload */
+public class CrafterVelocityCommand implements SimpleCommand {
 
-    public CrafterVelocityCommand(CrafterVelocityPlugin plugin) {
-        this.plugin = plugin;
+    private final CrafterConnectService service;
+    private final AdminCommand admin;
+
+    public CrafterVelocityCommand(CrafterConnectService service) {
+        this.service = service;
+        this.admin = new AdminCommand(service);
     }
 
     @Override
     public void execute(Invocation invocation) {
         var source = invocation.source();
-        String args = invocation.arguments().trim();
-
-        net.crafter.plugin.core.LanguageManager lm = plugin.getLanguageManager();
-        if (lm == null) return;
-
-        if (!source.hasPermission("crafter.admin")) {
-            source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("no_permission")));
-            return;
-        }
-
-        if (plugin.isExpired()) {
-            String latest = plugin.getUpdateResult() != null ? plugin.getUpdateResult().getLatestVersion() : "";
-            source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("version_expired", latest)));
-            return;
-        }
-
-        if (args.isEmpty() || args.equals("help")) {
-            source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("usage")));
-            return;
-        }
-
-        switch (args.toLowerCase()) {
-            case "status" -> {
-                source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_title")));
-                if (plugin.getCrafterConfig() == null || !plugin.getCrafterConfig().isConfigured()) {
-                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_info_line", lm.getMessage("status_not_configured"))));
-                } else {
-                    boolean connected = plugin.getWsClient() != null && plugin.getWsClient().isConnected();
-                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_info_line", (connected ? lm.getMessage("status_connected") : lm.getMessage("status_disconnected")))));
-                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("status_queue_line", (plugin.getWsClient() != null ? plugin.getWsClient().getOfflineQueueSize() : 0))));
-                }
-            }
-            case "reload" -> {
-                try {
-                    plugin.reload();
-                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("reloaded")));
-                } catch (Exception e) {
-                    source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("reload_error", e.getMessage())));
-                }
-            }
-            default -> source.sendMessage(Component.text(lm.getMessage("prefix") + lm.getMessage("usage")));
+        AdminCommand.Sender sender = new AdminCommand.Sender() {
+            @Override public boolean hasPermission(String permission) { return source.hasPermission(permission); }
+            @Override public void send(String message) { source.sendMessage(VelocityPlatform.legacy(message)); }
+        };
+        if (!admin.handle(sender, invocation.arguments())) {
+            sender.send(service.lang().getMessage("prefix") + service.lang().getMessage("usage_proxy"));
         }
     }
 
     @Override
+    public List<String> suggest(Invocation invocation) {
+        String[] args = invocation.arguments();
+        return AdminCommand.complete(args.length == 0 ? new String[]{""} : args,
+                invocation.source().hasPermission(AdminCommand.PERMISSION), List.of());
+    }
+
+    @Override
     public boolean hasPermission(Invocation invocation) {
-        return invocation.source().hasPermission("crafter.admin");
+        return invocation.source().hasPermission(AdminCommand.PERMISSION);
     }
 }

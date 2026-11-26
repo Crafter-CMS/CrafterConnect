@@ -6,13 +6,18 @@ import com.google.gson.JsonParser;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.function.Consumer;
 
+/**
+ * Sürüm kontrolü (#371):
+ * <ul>
+ *   <li>GitHub Releases'ta daha yeni sürüm varsa yalnızca bilgi verilir. 1.x'teki "7 gün sonra eklentiyi kapat"
+ *   davranışı kaldırıldı; asıl sınır Crafter kataloğundaki {@code minVersion}'dır.</li>
+ *   <li>Katalogdaki asgari sürümün altındaysa konsolda uyarı gösterilir (backend bu sürümü bağlamaz).</li>
+ * </ul>
+ */
 public class UpdateChecker {
 
-    public static final long EXPIRATION_GRACE_PERIOD_DAYS = 7;
     public static final String DEFAULT_REPO = "Crafter-CMS/CrafterConnect";
     public static final String RELEASES_URL = "https://github.com/" + DEFAULT_REPO + "/releases";
 
@@ -29,12 +34,12 @@ public class UpdateChecker {
     }
 
     public void checkForUpdates(Consumer<UpdateCheckResult> resultConsumer) {
-        new Thread(() -> {
+        Thread t = new Thread(() -> {
             UpdateCheckResult result = checkSync();
-            if (resultConsumer != null) {
-                resultConsumer.accept(result);
-            }
-        }, "crafter-update-checker").start();
+            if (resultConsumer != null) resultConsumer.accept(result);
+        }, "crafter-update-checker");
+        t.setDaemon(true);
+        t.start();
     }
 
     public UpdateCheckResult checkSync() {
@@ -48,7 +53,7 @@ public class UpdateChecker {
 
             if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
                 JsonObject json = JsonParser.parseReader(new InputStreamReader(connection.getInputStream())).getAsJsonObject();
-                return parseReleaseJson(json, currentVersion, Instant.now());
+                return parseReleaseJson(json, currentVersion);
             }
         } catch (Exception ignored) {
             // Ağ kesintisi veya rate-limit durumunda eklentinin çalışmasını bozma
@@ -56,34 +61,17 @@ public class UpdateChecker {
         return UpdateCheckResult.upToDate(currentVersion);
     }
 
-    public static UpdateCheckResult parseReleaseJson(JsonObject json, String currentVersion, Instant now) {
-        if (json == null || !json.has("tag_name")) {
-            return UpdateCheckResult.upToDate(currentVersion);
-        }
-
+    public static UpdateCheckResult parseReleaseJson(JsonObject json, String currentVersion) {
+        if (json == null || !json.has("tag_name")) return UpdateCheckResult.upToDate(currentVersion);
         String rawLatest = json.get("tag_name").getAsString();
         String downloadUrl = json.has("html_url") ? json.get("html_url").getAsString() : RELEASES_URL;
+        if (!isNewerVersion(rawLatest, currentVersion)) return UpdateCheckResult.upToDate(currentVersion);
+        return new UpdateCheckResult(true, currentVersion, rawLatest, downloadUrl);
+    }
 
-        if (!isNewerVersion(rawLatest, currentVersion)) {
-            return UpdateCheckResult.upToDate(currentVersion);
-        }
-
-        Instant publishedAt = null;
-        if (json.has("published_at") && !json.get("published_at").isJsonNull()) {
-            try {
-                publishedAt = Instant.parse(json.get("published_at").getAsString());
-            } catch (Exception ignored) {}
-        }
-
-        long daysElapsed = 0;
-        boolean expired = false;
-        if (publishedAt != null) {
-            Duration duration = Duration.between(publishedAt, now);
-            daysElapsed = Math.max(0, duration.toDays());
-            expired = daysElapsed >= EXPIRATION_GRACE_PERIOD_DAYS;
-        }
-
-        return new UpdateCheckResult(true, currentVersion, rawLatest, publishedAt, daysElapsed, expired, downloadUrl);
+    /** current, katalogdaki asgari sürümün altında mı (minVersion yoksa false) */
+    public static boolean isBelowMinimum(String current, String minVersion) {
+        return minVersion != null && !minVersion.isBlank() && isNewerVersion(minVersion, current);
     }
 
     public static boolean isNewerVersion(String latest, String current) {

@@ -1,38 +1,31 @@
 package net.crafter.plugin.core.model;
 
 /**
- * crafter.net.tr'den gelen bir komut paketi.
- * MongoDB'deki dökümanla birebir eşleşir.
+ * Backend'den gelen teslimat komutu ({@code {"type":"command","payload":{…}}}).
+ * <pre>{"commandId":"cmd_…","command":"lp user Notch parent add vip","player":"Notch",
+ *  "identity":{"type":"minecraft_uuid","value":"…"},"requireOnline":null}</pre>
+ * Backend %username% gibi yer tutucuları kendisi doldurur; eklenti yalnızca {@code %player%}'ı doldurur.
  */
 public class PendingCommand {
 
-    /** MongoDB _id (ObjectId string) — ACK/NACK için kullanılır */
+    public static final String PLAYER_PLACEHOLDER = "%player%";
+
     private String commandId;
-
-    /** Çalıştırılacak komut. %player% placeholder'ı desteklenir. */
     private String command;
-
-    /** Hedef oyuncunun Minecraft kullanıcı adı */
     private String player;
+    private PlayerIdentity identity;
+    /** null: oyuncu varsa çevrimiçi olmasını bekle; false: hemen çalıştır; true: bekle */
+    private Boolean requireOnline;
+    /** Eklenti kuyruğuna alındığı an (epoch ms); yalnızca yerel */
+    private long queuedAt;
 
-    /** Hangi sunucuda çalıştırılacak (opsiyonel, boşsa her sunucuda dene) */
-    private String serverId;
+    public PendingCommand() {}
 
-    /**
-     * Oyuncu offline ise ne yapılacak:
-     *   QUEUE  → Oyuncu girince tekrar dene (default)
-     *   IGNORE → Atla
-     */
-    private String offlineAction;
-
-    /** Satın alınan ürün adı (loglama/debug için) */
-    private String productName;
-
-    public PendingCommand() {
-        this.offlineAction = "QUEUE";
+    public PendingCommand(String commandId, String command, String player) {
+        this.commandId = commandId;
+        this.command = command;
+        this.player = player;
     }
-
-    // --- Getters & Setters ---
 
     public String getCommandId() { return commandId; }
     public void setCommandId(String commandId) { this.commandId = commandId; }
@@ -43,26 +36,50 @@ public class PendingCommand {
     public String getPlayer() { return player; }
     public void setPlayer(String player) { this.player = player; }
 
-    public String getServerId() { return serverId; }
-    public void setServerId(String serverId) { this.serverId = serverId; }
+    public PlayerIdentity getIdentity() { return identity; }
+    public void setIdentity(PlayerIdentity identity) { this.identity = identity; }
 
-    public String getOfflineAction() { return offlineAction; }
-    public void setOfflineAction(String offlineAction) { this.offlineAction = offlineAction; }
+    public Boolean getRequireOnline() { return requireOnline; }
+    public void setRequireOnline(Boolean requireOnline) { this.requireOnline = requireOnline; }
 
-    public String getProductName() { return productName; }
-    public void setProductName(String productName) { this.productName = productName; }
+    public long getQueuedAt() { return queuedAt; }
+    public void setQueuedAt(long queuedAt) { this.queuedAt = queuedAt; }
+
+    public boolean hasPlayer() {
+        return player != null && !player.isBlank();
+    }
+
+    /** Komut oyuncunun çevrimiçi olmasını bekler mi */
+    public boolean waitsForPlayer() {
+        return hasPlayer() && !Boolean.FALSE.equals(requireOnline);
+    }
+
+    /** Doğrulanmış UUID (identity minecraft_uuid ise), yoksa null */
+    public String verifiedUuid() {
+        if (identity == null || !PlayerIdentity.MINECRAFT_UUID.equals(identity.getType())) return null;
+        return identity.getValue();
+    }
 
     /**
-     * Komuttaki %player% placeholder'ını gerçek oyuncu adıyla değiştirir.
+     * Konsola gidecek komut: baştaki "/" atılır ve %player% oyuncu adıyla doldurulur. Oyuncu adı önce
+     * {@link net.crafter.plugin.core.delivery.CommandGuard} ile doğrulanmalıdır.
      */
     public String resolveCommand() {
         if (command == null) return null;
-        return command.replace("%player%", player != null ? player : "");
+        String resolved = command.trim();
+        while (resolved.startsWith("/")) resolved = resolved.substring(1).trim();
+        return resolved.replace(PLAYER_PLACEHOLDER, commandPlayer());
+    }
+
+    /** %player% değeri: boşluklu (Bedrock) ad çift tırnak içinde tek argüman olur (backend commandUsername ile aynı) */
+    public String commandPlayer() {
+        String p = player == null ? "" : player.trim();
+        return p.contains(" ") ? "\"" + p + "\"" : p;
     }
 
     @Override
     public String toString() {
-        return "PendingCommand{id=" + commandId + ", player=" + player
-                + ", product=" + productName + ", cmd=" + command + "}";
+        // Komut metni ve oyuncu adı loglarda gösterilmez
+        return "PendingCommand{id=" + commandId + "}";
     }
 }

@@ -66,7 +66,7 @@ public class ChestMenu extends MenuManager.BaseMenu {
             if (clicked.getItemMeta().getDisplayName().contains(item.getName())) {
                 player.sendMessage(plugin.getLanguageManager().getMessage("prefix") + 
                         plugin.getLanguageManager().getMessage("item_using", item.getName()));
-                plugin.getWsClient().useChestItem(player.getName(), item.getId());
+                plugin.getService().useChestItem(player.getName(), player.getUniqueId(), item.getId());
                 player.closeInventory();
                 return;
             }

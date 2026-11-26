@@ -1,41 +1,33 @@
 package net.crafter.plugin.core;
 
-import net.crafter.plugin.core.model.PendingCommand;
+import java.util.function.Consumer;
 
 /**
- * Platform-bağımsız komut çalıştırıcı arayüzü.
+ * Platforma özgü komut çalıştırma ve oyuncu işlemleri.
  */
 public interface CommandExecutor {
 
     /**
-     * Komutu ilgili platformda çalıştırır.
-     * @param command Çalıştırılacak komut paketi
-     * @return true → başarılı
+     * Komutu konsol göndericisiyle platformun ana thread'inde (Folia'da global bölge zamanlayıcısında, proxy'de
+     * sıralı bir yürütücüde) çalıştırır. Çağıran thread'i bekletmez; geliş sırası korunur.
+     *
+     * @param command  baştaki "/" olmadan, doğrulanmış komut
+     * @param callback sonuç (true: komut çalıştı); herhangi bir thread'den çağrılabilir
      */
-    boolean execute(PendingCommand command);
+    void dispatchConsole(String command, Consumer<Boolean> callback);
 
-    /**
-     * Konsol üzerinden doğrudan komut çalıştırır.
-     */
-    void execute(String command);
-
-    /**
-     * Oyuncuya mesaj gönderir.
-     */
-    void sendMessage(String username, String message);
-
-    /**
-     * Satın alma sonucunu işler.
-     */
-    void handlePurchaseResponse(String username, boolean success, String message);
-
-    /**
-     * Oyuncunun online olup olmadığını kontrol eder.
-     */
+    /** Oyuncu çevrimiçi mi (ad büyük/küçük harf duyarsız) */
     boolean isPlayerOnline(String playerName);
 
-    /**
-     * Platform adı.
-     */
+    /** Bu UUID'li oyuncu çevrimiçi mi */
+    default boolean isPlayerOnline(java.util.UUID uuid) {
+        return false;
+    }
+
+    void sendMessage(String username, String message);
+
+    void handlePurchaseResponse(String username, boolean success, String message);
+
+    /** Konsolda gösterilecek platform adı ve sürümü */
     String getPlatformName();
 }

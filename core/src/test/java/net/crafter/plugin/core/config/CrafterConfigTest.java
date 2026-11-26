@@ -63,4 +63,47 @@ public class CrafterConfigTest {
         config.setWebsiteId("your_website_custom");
         assertFalse(config.isConfigured());
     }
+
+    @Test
+    void tokenTakesPrecedenceOverLegacyFields() {
+        CrafterConfig config = new CrafterConfig();
+        config.setWebsiteId("web_12345");
+        config.setPluginSecret("sec_abc123xyz");
+        config.setServerId("survival-1");
+        assertEquals(CrafterConfig.Mode.LEGACY, config.mode());
+        config.setServerToken("cct_" + "a".repeat(43));
+        assertEquals(CrafterConfig.Mode.TOKEN, config.mode());
+        config.setServerToken("not-a-token");
+        assertEquals(CrafterConfig.Mode.LEGACY, config.mode());
+        assertFalse(config.toString().contains("sec_abc123xyz"));
+    }
+
+    @Test
+    void apiUrlAcceptsHostOrUrl() {
+        CrafterConfig c = new CrafterConfig();
+        assertEquals("https://api.crafter.net.tr", c.httpBase());
+        assertEquals("wss://api.crafter.net.tr", c.wsBase());
+        c.setApiUrl("http://localhost:3000/");
+        assertEquals("http://localhost:3000", c.httpBase());
+        assertEquals("ws://localhost:3000", c.wsBase());
+        c.setApiUrl("dev-api.crafter.net.tr");
+        c.setUseSsl(false);
+        assertEquals("http://dev-api.crafter.net.tr", c.httpBase());
+    }
+
+    @Test
+    void readsV2AndOldKeys() {
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("server-token", "cct_" + "b".repeat(43));
+        m.put("debug", "true"); // 1.x Velocity anahtarı
+        m.put("language", "../../etc");
+        m.put("report-players", "false");
+        m.put("allowed-command-prefixes", java.util.List.of("lp user"));
+        CrafterConfig c = CrafterConfig.from(net.crafter.plugin.core.support.Fakes.mapSource(m));
+        assertEquals(CrafterConfig.Mode.TOKEN, c.mode());
+        assertTrue(c.isDebug());
+        assertEquals("tr", c.getLanguage(), "path characters are not allowed in language");
+        assertFalse(c.isReportPlayers());
+        assertEquals(java.util.List.of("lp user"), c.getAllowedCommandPrefixes());
+    }
 }
