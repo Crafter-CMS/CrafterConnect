@@ -75,12 +75,29 @@ debug-mode: false
   gelen komutları Crafter saklar ve sunucu bağlanınca sırayla gönderir.
 - **Bir kez çalıştırma:** Her komutun `commandId`'si saklanır; aynı komut tekrar gelirse çalıştırılmaz, yalnızca onay
   yinelenir. Onaylar bağlantı yokken diske yazılır ve bağlanınca gönderilir.
-- **Komut koruması:** Oyuncu adı Java (`[A-Za-z0-9_]{1,16}`) ya da Bedrock/Floodgate (`.` önekli, kelimeler arasında
-  tek boşluk) kuralına uymalı; tırnak, `; & | $ @ %`, satır sonu ve kontrol karakteri içeren komut çalışmaz.
-  `allowed-command-prefixes` ve paneldeki liste doluysa komut ikisine de uymalı. Reddedilen komut Crafter'a bildirilir ve
-  sipariş incelemeye düşer.
+- **Komut koruması:**
+  - Oyuncu adı (`player` ve eklentinin doldurduğu `%player%`) Java (`[A-Za-z0-9_]{1,16}`) ya da Bedrock/Floodgate
+    (`.` önekli, kelimeler arasında tek boşluk) kuralına uymalı. Bu kural yalnızca oyuncu adına uygulanır; adda boşluk
+    dışında tırnak, `; & | $ @ %` gibi karakterler olamaz.
+  - Komut metninin tamamında satır sonu ve kontrol karakteri reddedilir. Komutun kendisindeki `;` gibi karakterler
+    reddedilmez (komutu satıcı yazar; Bukkit konsolu `;` ile komutu bölmez).
+  - `allowed-command-prefixes` ve paneldeki liste doluysa komut ikisine de uymalı.
+  - Reddedilen komut Crafter'a bildirilir ve sipariş incelemeye düşer; aynı komut tekrar gelirse yine reddedilir.
 - Komutlar konsol yetkisiyle ana thread'de (Folia'da global bölge zamanlayıcısında) çalışır.
 - **Bedrock (Geyser/Floodgate):** Floodgate kuruluysa öneki ondan okunur ve Crafter'a bildirilir.
+
+---
+
+## 🔨 Derleme
+
+Sürüm jar'larını her zaman temiz derlemeyle üretin (eski `target/` dosyaları karışmasın):
+
+```bash
+mvn -B clean package
+```
+
+Jar'lar: `spigot/target/crafter-connect-spigot-<sürüm>.jar`, `velocity/target/…`, `bungee/target/…`
+(`original-*.jar` dosyalarını kullanmayın). Aynı komut GitHub Actions'ta her push ve PR'da çalışır.
 
 ---
 

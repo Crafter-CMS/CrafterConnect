@@ -62,6 +62,23 @@ class CommandStoreTest {
     }
 
     @Test
+    void lastResultSurvivesRestartAndOldRecordsMeanExecuted() throws Exception {
+        Path file = dir.resolve("commands.json");
+        CommandStore store = new CommandStore(file);
+        store.beginRun("cmd_n");
+        store.finishRun("cmd_n", CommandStore.Outgoing.nack("cmd_n", "player_identity_invalid"));
+        assertEquals(CommandStore.Outgoing.nack("cmd_n", "player_identity_invalid"), new CommandStore(file).resultOf("cmd_n"));
+
+        // 2.0 geliştirme sürümündeki biçim: sonuç alanı yok
+        Path old = dir.resolve("old.json");
+        Files.writeString(old, "{\"version\":2,\"queue\":[],\"processed\":{\"cmd_o\":{\"at\":" + System.currentTimeMillis()
+                + ",\"state\":\"done\"}},\"outbox\":[]}");
+        CommandStore reopened = new CommandStore(old);
+        assertTrue(reopened.isProcessed("cmd_o"));
+        assertEquals(CommandStore.Outgoing.ack("cmd_o", "executed"), reopened.resultOf("cmd_o"));
+    }
+
+    @Test
     void interruptedRunIsReportedNotRepeated() {
         Path file = dir.resolve("commands.json");
         CommandStore store = new CommandStore(file);
@@ -70,6 +87,7 @@ class CommandStoreTest {
         CommandStore reopened = new CommandStore(file);
         assertFalse(reopened.beginRun("cmd_crash"));
         assertEquals(List.of(CommandStore.Outgoing.nack("cmd_crash", CommandStore.REASON_INTERRUPTED)), reopened.outgoing());
+        assertEquals(CommandStore.Outgoing.nack("cmd_crash", CommandStore.REASON_INTERRUPTED), reopened.resultOf("cmd_crash"));
     }
 
     @Test

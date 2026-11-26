@@ -60,7 +60,8 @@ public final class CommandProcessor {
             // Backend ACK alamayınca aynı id ile yeniden gönderir
             if (store.isRunning(id)) return; // sonuç birazdan gönderilecek
             if (store.isProcessed(id)) {
-                reply(CommandStore.Outgoing.ack(id, "executed"));
+                // Önceki sonuç aynen yinelenir: reddedilen komut yine NACK alır
+                reply(store.resultOf(id));
                 return;
             }
             if (store.isQueued(id)) {
@@ -119,7 +120,7 @@ public final class CommandProcessor {
     private void run(PendingCommand pc) {
         String id = pc.getCommandId();
         if (!store.beginRun(id)) {
-            reply(CommandStore.Outgoing.ack(id, "executed"));
+            if (!store.isRunning(id)) reply(store.resultOf(id));
             return;
         }
         String resolved = pc.resolveCommand();

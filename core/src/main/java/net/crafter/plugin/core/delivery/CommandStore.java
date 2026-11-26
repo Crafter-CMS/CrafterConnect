@@ -77,8 +77,20 @@ public class CommandStore {
     private static final class Processed {
         long at;
         String state; // running | done
+        /** Son sonuç; 2.0 öncesi kayıtlarda yok (o zaman "executed" sayılır) */
+        String kind;
+        String status;
+        String reason;
         Processed() {}
         Processed(long at, String state) { this.at = at; this.state = state; }
+        Processed(long at, String state, Outgoing result) {
+            this(at, state);
+            if (result != null) {
+                this.kind = result.kind;
+                this.status = result.status;
+                this.reason = result.reason;
+            }
+        }
     }
 
     private static final class Snapshot {
@@ -156,6 +168,16 @@ public class CommandStore {
         return commandId != null && (processed.containsKey(commandId) || inFlight.contains(commandId));
     }
 
+    /**
+     * İşlenmiş komutun son sonucu (aynı commandId tekrar gelince aynısı gönderilir). Reddedilen komut için NACK döner,
+     * böylece backend kaydı yanlışlıkla "executed" yapmaz. Sonucu kayıtlı olmayan eski kayıtlar için ack executed.
+     */
+    public synchronized Outgoing resultOf(String commandId) {
+        Processed p = commandId == null ? null : processed.get(commandId);
+        if (p == null || p.kind == null) return Outgoing.ack(commandId, "executed");
+        return new Outgoing(commandId, p.kind, p.status, p.reason);
+    }
+
     public synchronized boolean isRunning(String commandId) {
         return commandId != null && inFlight.contains(commandId);
     }
@@ -178,7 +200,7 @@ public class CommandStore {
     public synchronized void finishRun(String commandId, Outgoing result) {
         if (commandId == null) return;
         inFlight.remove(commandId);
-        processed.put(commandId, new Processed(clock.getAsLong(), "done"));
+        processed.put(commandId, new Processed(clock.getAsLong(), "done", result));
         if (result != null) outbox.add(result);
         save();
     }
@@ -222,8 +244,11 @@ public class CommandStore {
         boolean changed = false;
         for (Map.Entry<String, Processed> e : processed.entrySet()) {
             if ("running".equals(e.getValue().state)) {
+                Outgoing nack = Outgoing.nack(e.getKey(), REASON_INTERRUPTED);
                 e.getValue().state = "done";
-                outbox.add(Outgoing.nack(e.getKey(), REASON_INTERRUPTED));
+                e.getValue().kind = nack.kind;
+                e.getValue().reason = nack.reason;
+                outbox.add(nack);
                 changed = true;
             }
         }

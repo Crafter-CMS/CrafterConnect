@@ -119,6 +119,33 @@ class CommandProcessorTest {
     }
 
     @Test
+    void rejectedCommandResentWithSameIdGetsTheSameNack() {
+        platform.online.add("Notch");
+        processor.onCommand(cmd("cmd_p", "op Notch", "Notch"));            // önek listesi yok: geçer, ama:
+        sent.clear();
+        CommandProcessor strict = new CommandProcessor(store, platform,
+                () -> new CommandGuard(null, "minecraft_java", List.of("give"), List.of()), platform.log);
+        strict.setSender(sent::add);
+        strict.onCommand(cmd("cmd_n", "op Notch", "Notch"));
+        strict.onCommand(cmd("cmd_n", "op Notch", "Notch"));                 // backend tekrar gönderdi
+        CommandStore.Outgoing nack = CommandStore.Outgoing.nack("cmd_n", CommandGuard.REASON_PREFIX_NOT_ALLOWED);
+        assertEquals(List.of(nack, nack), sent, "a rejected command must never be acked as executed");
+        assertEquals(List.of("op Notch"), platform.executed);
+    }
+
+    @Test
+    void failedExecutionResentKeepsNack() {
+        platform.online.add("Notch");
+        platform.result = false;
+        processor.onCommand(cmd("cmd_f", "unknowncmd Notch", "Notch"));
+        platform.result = true;
+        processor.onCommand(cmd("cmd_f", "unknowncmd Notch", "Notch"));
+        CommandStore.Outgoing nack = CommandStore.Outgoing.nack("cmd_f", CommandProcessor.REASON_EXECUTION_FAILED);
+        assertEquals(List.of(nack, nack), sent);
+        assertEquals(1, platform.executed.size());
+    }
+
+    @Test
     void failedExecutionIsNacked() {
         platform.online.add("Notch");
         platform.result = false;

@@ -47,6 +47,14 @@ import java.util.function.Supplier;
 public class CrafterWebSocketClient extends WebSocketClient {
 
     static final int HEARTBEAT_SECONDS = 30;
+    /**
+     * Bağlantı canlılığı: istemci 30 sn'de bir ping gönderir (Cloudflare'in 100 sn boşta kalma sınırının altında;
+     * backend de 30 sn'de bir ping atar). 90 sn hiçbir veri ya da pong gelmezse soket yarı açık sayılır ve yeniden
+     * kurulur. Java-WebSocket'in kendi kontrolü (connectionLostTimeout × 1,5) de 90 sn'ye ayarlanır; 1.x'teki
+     * 25 sn (37,5 sn tolerans) ve 60 sn watchdog geç gelen bir pong'da bağlantıyı gereksiz yere koparıyordu.
+     */
+    static final int PING_SECONDS = 30;
+    static final int DEAD_AFTER_SECONDS = 90;
     static final int MAX_BACKOFF_SECONDS = 120;
 
     /** Backend'in v2 kimlik doğrulama bilgisi */
@@ -100,8 +108,8 @@ public class CrafterWebSocketClient extends WebSocketClient {
         this.log = platform.log();
         this.backoff = new Backoff(config.getReconnectDelaySeconds(), MAX_BACKOFF_SECONDS);
 
-        // RFC 6455 Ping; Pong gelmezse soket kapanır ve onClose tetiklenir
-        setConnectionLostTimeout(25);
+        // RFC 6455 Ping/Pong; kütüphanenin kendi kontrolü 60 × 1,5 = 90 sn pong gelmezse kapatır
+        setConnectionLostTimeout(DEAD_AFTER_SECONDS * 2 / 3);
         setTcpNoDelay(true);
     }
 
@@ -148,7 +156,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
             scheduleReconnect();
         }
 
-        scheduler.scheduleWithFixedDelay(this::runWatchdog, 15, 15, TimeUnit.SECONDS);
+        scheduler.scheduleWithFixedDelay(this::runWatchdog, PING_SECONDS, PING_SECONDS, TimeUnit.SECONDS);
         scheduler.scheduleWithFixedDelay(this::sendHeartbeat, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
     }
 
@@ -367,8 +375,8 @@ public class CrafterWebSocketClient extends WebSocketClient {
                     log.debug("[CrafterConnect] Failed to send protocol ping: " + e.getMessage());
                 }
                 long elapsed = System.currentTimeMillis() - lastReceivedTimestamp;
-                // 60 sn'den uzun süredir hiçbir veri gelmediyse soket yarı açık kabul edilir
-                if (elapsed > 60_000) {
+                // DEAD_AFTER_SECONDS boyunca hiçbir veri ya da pong gelmediyse soket yarı açık kabul edilir
+                if (elapsed > DEAD_AFTER_SECONDS * 1000L) {
                     log.warn("[CrafterConnect] No response from server for " + elapsed / 1000 + "s. Resetting the connection...");
                     try {
                         closeConnection(1006, "Watchdog timeout");
@@ -410,13 +418,18 @@ public class CrafterWebSocketClient extends WebSocketClient {
             return;
         }
         reconnectFuture = scheduler.schedule(() -> {
+            boolean open = false;
             try {
-                if (running.get() && !stopReconnecting && !isOpen()) reconnect();
+                // Bloklayan sürüm: el sıkışma bitmeden "bağlanamadı" sanılıp yeni deneme planlanmaz
+                if (running.get() && !stopReconnecting && !isOpen()) open = reconnectBlocking();
+                else open = isOpen();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Throwable t) {
                 log.error("[CrafterConnect] Reconnect attempt failed: " + t.getMessage());
             } finally {
                 isReconnecting.set(false);
-                if (!isOpen()) scheduleReconnect();
+                if (!open && !isOpen()) scheduleReconnect();
             }
         }, delay, TimeUnit.SECONDS);
     }
