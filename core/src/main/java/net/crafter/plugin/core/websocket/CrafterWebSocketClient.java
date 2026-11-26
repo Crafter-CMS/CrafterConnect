@@ -1,115 +1,169 @@
 package net.crafter.plugin.core.websocket;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.crafter.plugin.core.CommandExecutor;
-import net.crafter.plugin.core.config.CrafterConfig;
-import net.crafter.plugin.core.model.CrafterMessage;
-import net.crafter.plugin.core.model.MessageType;
-import net.crafter.plugin.core.model.PendingCommand;
-import net.crafter.plugin.core.StatisticsManager;
+import com.google.gson.reflect.TypeToken;
+import net.crafter.plugin.core.BuildInfo;
+import net.crafter.plugin.core.LanguageManager;
 import net.crafter.plugin.core.MarketManager;
+import net.crafter.plugin.core.PlayerManager;
+import net.crafter.plugin.core.StatisticsManager;
+import net.crafter.plugin.core.config.CrafterConfig;
+import net.crafter.plugin.core.connect.ServerInfo;
+import net.crafter.plugin.core.delivery.Backoff;
+import net.crafter.plugin.core.delivery.CommandProcessor;
+import net.crafter.plugin.core.delivery.CommandStore;
 import net.crafter.plugin.core.model.*;
+import net.crafter.plugin.core.platform.CrafterLog;
+import net.crafter.plugin.core.platform.Platform;
 import org.java_websocket.WebSocket;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.framing.Framedata;
 import org.java_websocket.handshake.ServerHandshake;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.util.List;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
- * Java-WebSocket kütüphanesi kullanarak crafter.net.tr bağlantısını yöneten istemci.
+ * Crafter WebSocket bağlantısı (protokol 2, #37 bölüm 3).
+ *
+ * <ul>
+ *   <li>Token ile: {@code wss://api.crafter.net.tr/website/plugin/wss?protocol=2} + {@code Authorization: Bearer cct_…}.
+ *   Token adres satırına yazılmaz.</li>
+ *   <li>Eski bağlantı: {@code ?website-id=…&plugin-secret=…&server-id=…&protocol=2}. Adres loglanmaz.</li>
+ *   <li>Kimlik doğrulamadan sonra {@code hello} (platform, sürüm, Minecraft sürümü, maxPlayers, floodgatePrefix),
+ *   30 sn'de bir {@code heartbeat} gönderilir ve bekleyen ACK/NACK'ler yollanır.</li>
+ *   <li>Bağlantı koparsa üstel bekleme ve rastgele sapmayla yeniden bağlanır. Token geçersizse ya da başka bir
+ *   kodla yeniden bağlanıldıysa denemeyi bırakır.</li>
+ * </ul>
  */
 public class CrafterWebSocketClient extends WebSocketClient {
 
-    private static final Logger log = LoggerFactory.getLogger(CrafterWebSocketClient.class);
+    static final int HEARTBEAT_SECONDS = 30;
+    /**
+     * Bağlantı canlılığı: istemci 30 sn'de bir ping gönderir (Cloudflare'in 100 sn boşta kalma sınırının altında;
+     * backend de 30 sn'de bir ping atar). 90 sn hiçbir veri ya da pong gelmezse soket yarı açık sayılır ve yeniden
+     * kurulur. Java-WebSocket'in kendi kontrolü (connectionLostTimeout × 1,5) de 90 sn'ye ayarlanır; 1.x'teki
+     * 25 sn (37,5 sn tolerans) ve 60 sn watchdog geç gelen bir pong'da bağlantıyı gereksiz yere koparıyordu.
+     */
+    static final int PING_SECONDS = 30;
+    static final int DEAD_AFTER_SECONDS = 90;
+    static final int MAX_BACKOFF_SECONDS = 120;
+
+    /** Backend'in v2 kimlik doğrulama bilgisi */
+    public record AuthInfo(String websiteId, String serverId, String identityType, List<String> allowedCommandPrefixes) {}
+
+    /** Bağlantı olayları (CrafterConnectService dinler) */
+    public interface Listener {
+        void onAuthenticated(AuthInfo info);
+        /** Token geçersiz ya da kaldırıldı: yeniden bağlanma durdu */
+        void onTokenRejected(String reason);
+        default void onDisconnected() {}
+    }
 
     private final CrafterConfig config;
-    private final CommandExecutor executor;
+    private final Platform platform;
+    private final CommandProcessor processor;
     private final StatisticsManager statsManager;
-    private final net.crafter.plugin.core.PlayerManager playerManager;
-    private final net.crafter.plugin.core.MarketManager marketManager;
-    private final net.crafter.plugin.core.LanguageManager languageManager;
-    private final Gson gson;
+    private final PlayerManager playerManager;
+    private final MarketManager marketManager;
+    private final Supplier<LanguageManager> languageManager;
+    private final Supplier<ServerInfo> serverInfo;
+    private final Listener listener;
+    private final CrafterLog log;
+    private final Gson gson = new Gson();
+    private final Backoff backoff;
 
     private ScheduledExecutorService scheduler;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicBoolean authenticated = new AtomicBoolean(false);
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private final AtomicBoolean isReconnecting = new AtomicBoolean(false);
+    private volatile boolean stopReconnecting = false;
+    private volatile String lastError;
     private volatile long lastReceivedTimestamp = System.currentTimeMillis();
     private ScheduledFuture<?> reconnectFuture = null;
 
-    // Oyuncu offline ise bekletilen komutlar (player → komut listesi)
-    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<PendingCommand>> offlineQueue
-            = new ConcurrentHashMap<>();
-
-    public CrafterWebSocketClient(CrafterConfig config, CommandExecutor executor, StatisticsManager statsManager, net.crafter.plugin.core.PlayerManager playerManager, net.crafter.plugin.core.MarketManager marketManager, net.crafter.plugin.core.LanguageManager languageManager) {
-        super(createURI(config));
+    public CrafterWebSocketClient(CrafterConfig config, Platform platform, CommandProcessor processor,
+                                  StatisticsManager statsManager, PlayerManager playerManager, MarketManager marketManager,
+                                  Supplier<LanguageManager> languageManager, Supplier<ServerInfo> serverInfo,
+                                  Listener listener) {
+        super(createURI(config), createHeaders(config));
         this.config = config;
-        this.executor = executor;
+        this.platform = platform;
+        this.processor = processor;
         this.statsManager = statsManager;
         this.playerManager = playerManager;
         this.marketManager = marketManager;
         this.languageManager = languageManager;
-        this.gson = new GsonBuilder().create();
+        this.serverInfo = serverInfo;
+        this.listener = listener;
+        this.log = platform.log();
+        this.backoff = new Backoff(config.getReconnectDelaySeconds(), MAX_BACKOFF_SECONDS);
 
-        // Otomatik bağlantı kaybı kontrolü (25 saniye)
-        // Belirli aralıklarla RFC 6455 Ping gönderir, Pong gelmezse soketi kapatıp onClose tetikler.
-        setConnectionLostTimeout(25);
+        // RFC 6455 Ping/Pong; kütüphanenin kendi kontrolü 60 × 1,5 = 90 sn pong gelmezse kapatır
+        setConnectionLostTimeout(DEAD_AFTER_SECONDS * 2 / 3);
         setTcpNoDelay(true);
     }
 
-    private static URI createURI(CrafterConfig config) {
-        String protocol = config.isUseSsl() ? "wss" : "ws";
-        String url = String.format("%s://%s/website/plugin/wss?website-id=%s&plugin-secret=%s&server-id=%s",
-                protocol,
-                config.getApiUrl(),
-                config.getWebsiteId(),
-                config.getPluginSecret(),
-                config.getServerId());
-        return URI.create(url);
+    static URI createURI(CrafterConfig config) {
+        String base = config.wsBase() + "/website/plugin/wss?protocol=" + BuildInfo.PROTOCOL_VERSION;
+        if (config.mode() == CrafterConfig.Mode.LEGACY) {
+            base += "&website-id=" + enc(config.getWebsiteId())
+                    + "&plugin-secret=" + enc(config.getPluginSecret())
+                    + "&server-id=" + enc(config.getServerId());
+        }
+        return URI.create(base);
+    }
+
+    static Map<String, String> createHeaders(CrafterConfig config) {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("User-Agent", "CrafterConnect/" + BuildInfo.version());
+        if (config.mode() == CrafterConfig.Mode.TOKEN) {
+            headers.put("Authorization", "Bearer " + config.getServerToken());
+        }
+        return headers;
+    }
+
+    private static String enc(String v) {
+        return URLEncoder.encode(v == null ? "" : v.trim(), StandardCharsets.UTF_8);
     }
 
     public void start() {
-        if (!config.isConfigured()) {
-            log.warn("================================================================");
-            log.warn("[CrafterConnect] Eklenti henüz yapılandırılmamış (varsayılan config)!");
-            log.warn("[CrafterConnect] Lütfen config.yml dosyasındaki 'website-id', 'plugin-secret'");
-            log.warn("[CrafterConnect] ve 'server-id' alanlarını dashboard bilgilerinizle doldurun.");
-            log.warn("[CrafterConnect] WebSocket bağlantı denemeleri yapılmayacaktır.");
-            log.warn("================================================================");
-            return;
-        }
+        if (!config.isConfigured()) return;
 
         running.set(true);
+        processor.setSender(this::sendOutgoing);
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "crafter-ws-scheduler");
             t.setDaemon(true);
             return t;
         });
-        
-        log.info("[CrafterConnect] Initializing WebSocket connection...");
+
+        log.info("[CrafterConnect] Connecting to " + config.wsBase() + " ("
+                + (config.mode() == CrafterConfig.Mode.TOKEN ? "server token" : "legacy connection") + ")...");
         try {
             connect();
         } catch (Exception e) {
-            log.error("[CrafterConnect] Failed to initiate connection: {}", e.getMessage());
+            log.error("[CrafterConnect] Failed to initiate connection: " + e.getMessage());
             scheduleReconnect();
         }
-        
-        // Watchdog & Heartbeat görevi (her 15 saniyede bir soket durumunu kontrol eder)
-        scheduler.scheduleWithFixedDelay(this::runWatchdog, 15, 15, TimeUnit.SECONDS);
+
+        scheduler.scheduleWithFixedDelay(this::runWatchdog, PING_SECONDS, PING_SECONDS, TimeUnit.SECONDS);
+        scheduler.scheduleWithFixedDelay(this::sendHeartbeat, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
     }
 
     public void shutdown() {
         running.set(false);
         isReconnecting.set(false);
+        processor.setSender(null);
         cancelReconnectFuture();
         if (scheduler != null) {
             scheduler.shutdownNow();
@@ -117,33 +171,28 @@ public class CrafterWebSocketClient extends WebSocketClient {
         }
         try {
             close();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // zaten kapalı
+        }
     }
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
-        log.info("[CrafterConnect] WebSocket connection established. [OK]");
+        log.info("[CrafterConnect] WebSocket connection established.");
         reconnectAttempts.set(0);
         isReconnecting.set(false);
         lastReceivedTimestamp = System.currentTimeMillis();
         cancelReconnectFuture();
-
-        // Yeniden bağlantıda online oyuncuları backend'e senkronize et
-        syncOnlinePlayers();
     }
 
     @Override
     public void onMessage(String message) {
         lastReceivedTimestamp = System.currentTimeMillis();
-        if (config.isDebug()) {
-            log.info("[CrafterConnect] Incoming Message: {}", message);
-        }
-
         try {
             CrafterMessage msg = gson.fromJson(message, CrafterMessage.class);
-            handleMessage(msg);
+            if (msg != null) handleMessage(msg);
         } catch (Exception e) {
-            log.error("[CrafterConnect] Message processing error: {}", e.getMessage());
+            log.error("[CrafterConnect] Message processing error: " + e.getMessage());
         }
     }
 
@@ -161,27 +210,45 @@ public class CrafterWebSocketClient extends WebSocketClient {
 
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        if (running.get() && config.isConfigured()) {
-            log.warn("[CrafterConnect] Connection closed (Code: {}, Reason: {}, Remote: {}). Reconnecting...", code, reason, remote);
-            scheduleReconnect();
+        authenticated.set(false);
+        if (listener != null) listener.onDisconnected();
+        if (!running.get()) return;
+        if (isTokenRevocation(code, reason)) {
+            rejectToken(reason);
+            return;
         }
+        log.warn("[CrafterConnect] Connection closed (code " + code + (reason == null || reason.isBlank() ? "" : ", " + reason) + "). Reconnecting...");
+        scheduleReconnect();
+    }
+
+    /** 1008 "Invalid server token" ya da 4001 (yeniden bağlama/silme) yalnızca token bağlantısında kalıcıdır */
+    boolean isTokenRevocation(int code, String reason) {
+        if (config.mode() != CrafterConfig.Mode.TOKEN) return false;
+        String r = reason == null ? "" : reason.toLowerCase(Locale.ROOT);
+        return code == 4001 || (code == 1008 && r.contains("token"));
+    }
+
+    private void rejectToken(String reason) {
+        stopReconnecting = true;
+        lastError = "server_token_invalid";
+        log.error("[CrafterConnect] The server token is no longer valid" + (reason == null || reason.isBlank() ? "" : " (" + reason + ")")
+                + ". Create a new code in the dashboard and run /crafter connect <code>.");
+        if (listener != null) listener.onTokenRejected(reason);
     }
 
     @Override
     public void onError(Exception ex) {
-        log.error("[CrafterConnect] WebSocket error: {}", ex.getMessage());
-        if (running.get() && config.isConfigured() && !isOpen()) {
-            scheduleReconnect();
-        }
+        log.error("[CrafterConnect] WebSocket error: " + ex.getMessage());
+        if (running.get() && !isOpen()) scheduleReconnect();
     }
 
-    private void handleMessage(CrafterMessage message) {
+    void handleMessage(CrafterMessage message) {
         String type = message.getType();
         if (type == null) return;
-
-        switch (type.toLowerCase()) {
-            case "auth_ok", "auth_success" -> log.info("[CrafterConnect] Authentication successful! [OK]");
-            case "auth_fail" -> log.error("[CrafterConnect] Authentication failed! Please check your config.");
+        switch (type.toLowerCase(Locale.ROOT)) {
+            case "auth_ok", "auth_success" -> handleAuthSuccess(message);
+            case "auth_fail" -> log.error("[CrafterConnect] Authentication failed. Check the connection settings.");
+            case "error" -> handleError(message);
             case "command" -> handleCommand(message);
             case "statistics" -> handleStatistics(message);
             case "player_info" -> handlePlayerInfo(message);
@@ -189,178 +256,180 @@ public class CrafterWebSocketClient extends WebSocketClient {
             case "purchase_response" -> handlePurchaseResponse(message);
             case "chest_content" -> handleChestContent(message);
             case "use_item_response" -> handleUseItemResponse(message);
-            case "ping" -> sendPong();
+            case "ping" -> sendRaw(gson.toJson(new CrafterMessage(MessageType.PONG, null)));
+            default -> log.debug("[CrafterConnect] Unknown message type: " + type);
         }
     }
 
-    private void handlePlayerInfo(CrafterMessage message) {
-        if (message.getPayload() == null) return;
-        try {
-            net.crafter.plugin.core.model.PlayerData data = gson.fromJson(message.getPayload(), net.crafter.plugin.core.model.PlayerData.class);
-            if (playerManager != null) playerManager.updatePlayer(data);
-        } catch (Exception e) {
-            log.error("[CrafterConnect] Player info parse error: {}", e.getMessage());
+    private void handleAuthSuccess(CrafterMessage message) {
+        authenticated.set(true);
+        lastError = null;
+        JsonObject p = message.getPayload();
+        List<String> prefixes = new ArrayList<>();
+        if (p != null && p.has("settings") && p.get("settings").isJsonObject()) {
+            JsonElement list = p.getAsJsonObject("settings").get("allowedCommandPrefixes");
+            if (list != null && list.isJsonArray()) {
+                for (JsonElement e : list.getAsJsonArray()) {
+                    if (e.isJsonPrimitive()) prefixes.add(e.getAsString());
+                }
+            }
         }
+        AuthInfo info = new AuthInfo(str(p, "websiteId"), str(p, "serverId"), str(p, "identityType"), prefixes);
+        log.info("[CrafterConnect] Authenticated" + (info.serverId() != null ? " (server " + info.serverId() + ")" : "") + ".");
+        if (listener != null) listener.onAuthenticated(info);
+
+        sendHello();
+        if (config.isReportPlayers()) syncOnlinePlayers();
+        processor.flush();
     }
 
-    private void handleStatistics(CrafterMessage message) {
-        if (message.getData() == null) return;
-        try {
-            StatisticsData stats = gson.fromJson(message.getData(), StatisticsData.class);
-            if (statsManager != null) statsManager.updateStats(stats);
-        } catch (Exception e) {
-            log.error("[CrafterConnect] Statistics parse error: {}", e.getMessage());
+    private void handleError(CrafterMessage message) {
+        String code = message.getCode();
+        lastError = code;
+        if ("server_token_invalid".equals(code)) {
+            rejectToken(null);
+            return;
         }
+        log.error("[CrafterConnect] Server reported an error: " + (code == null ? "unknown" : code)
+                + (message.getMessage() == null ? "" : " (" + message.getMessage() + ")"));
     }
 
     private void handleCommand(CrafterMessage message) {
         PendingCommand pc = null;
-        
-        // Try parsing from payload first
         if (message.getPayload() != null) {
             pc = gson.fromJson(message.getPayload(), PendingCommand.class);
         }
-        
-        // If no payload or payload didn't have command, try direct command field
         if ((pc == null || pc.getCommand() == null) && message.getCommand() != null) {
-            pc = new PendingCommand();
-            pc.setCommand(message.getCommand());
+            pc = new PendingCommand(null, message.getCommand(), null);
         }
-
         if (pc == null || pc.getCommand() == null) return;
+        pc.setQueuedAt(0);
+        processor.onCommand(pc);
+    }
 
-        // Offline queue logic
-        String targetPlayer = pc.getPlayer();
-        if (targetPlayer != null && !targetPlayer.isBlank()) {
-            if (!executor.isPlayerOnline(targetPlayer)) {
-                log.info("[CrafterConnect] Player {} is offline. Adding command to queue.", targetPlayer);
-                addToQueue(targetPlayer, pc);
-                return; // Don't execute now
-            }
+    // --- Gönderim ---
+
+    private boolean sendOutgoing(CommandStore.Outgoing o) {
+        if (!isOpen() || !authenticated.get()) return false;
+        JsonObject data = new JsonObject();
+        data.addProperty("commandId", o.commandId);
+        if (o.isAck()) data.addProperty("status", o.status);
+        else data.addProperty("reason", o.reason);
+        return sendEvent(o.kind, data);
+    }
+
+    void sendHello() {
+        ServerInfo info = serverInfo.get();
+        JsonObject data = new JsonObject();
+        data.addProperty("platform", info.platform());
+        data.addProperty("pluginVersion", info.pluginVersion());
+        data.addProperty("protocol", BuildInfo.PROTOCOL_VERSION);
+        data.addProperty("transport", "ws");
+        if (info.gameVersion() != null) data.addProperty("gameVersion", info.gameVersion());
+        if (info.maxPlayers() > 0) data.addProperty("maxPlayers", info.maxPlayers());
+        if (info.floodgatePrefix() != null && !info.floodgatePrefix().isEmpty()) {
+            data.addProperty("floodgatePrefix", info.floodgatePrefix());
         }
+        sendEvent("hello", data);
+    }
 
-        log.info("[CrafterConnect] Executing command: {}", pc.getCommand());
-        boolean success = executor.execute(pc);
-        if (success && pc.getCommandId() != null) {
-            sendAck(pc.getCommandId());
+    private void sendHeartbeat() {
+        if (!running.get() || !isOpen() || !authenticated.get()) return;
+        try {
+            JsonObject data = new JsonObject();
+            data.addProperty("online", platform.onlinePlayers());
+            data.addProperty("maxPlayers", platform.maxPlayers());
+            sendEvent("heartbeat", data);
+        } catch (Throwable t) {
+            log.debug("[CrafterConnect] Heartbeat failed: " + t.getMessage());
         }
     }
 
-    private void sendPingPacket() {
-        if (isOpen()) {
-            try {
-                send(gson.toJson(new CrafterMessage(MessageType.PING, null)));
-            } catch (Exception ignored) {}
+    private boolean sendEvent(String eventName, JsonObject data) {
+        JsonObject json = new JsonObject();
+        json.addProperty("event", eventName);
+        json.add("data", data);
+        return sendRaw(gson.toJson(json));
+    }
+
+    private boolean sendRaw(String text) {
+        if (!isOpen()) return false;
+        try {
+            send(text);
+            return true;
+        } catch (Exception e) {
+            log.debug("[CrafterConnect] Send failed: " + e.getMessage());
+            return false;
         }
     }
 
-    private void sendPong() {
-        if (isOpen()) {
-            try {
-                send(gson.toJson(new CrafterMessage(MessageType.PONG, null)));
-            } catch (Exception ignored) {}
-        }
-    }
-
-    private void sendAck(String commandId) {
-        if (isOpen()) {
-            try {
-                JsonObject payload = new JsonObject();
-                payload.addProperty("commandId", commandId);
-                send(gson.toJson(new CrafterMessage(MessageType.ACK, payload)));
-            } catch (Exception e) {
-                log.error("[CrafterConnect] Failed to send ack for command {}: {}", commandId, e.getMessage());
-            }
-        }
-    }
+    // --- Yeniden bağlanma ---
 
     private void runWatchdog() {
-        if (!running.get() || !config.isConfigured()) return;
-
+        if (!running.get()) return;
         try {
             if (isOpen()) {
-                long now = System.currentTimeMillis();
-                long elapsed = now - lastReceivedTimestamp;
-
-                // Protokol seviyesinde RFC 6455 Ping gönder (Keep-Alive)
                 try {
                     sendPing();
                 } catch (Exception e) {
-                    if (config.isDebug()) {
-                        log.debug("[CrafterConnect] Failed to send protocol ping: {}", e.getMessage());
-                    }
+                    log.debug("[CrafterConnect] Failed to send protocol ping: " + e.getMessage());
                 }
-
-                // Eğer 60 saniyeden uzun süredir backend'den hiçbir veri veya ping/pong gelmemişse:
-                // Soket askıda/donmuş (half-open zombie) kabul edilir.
-                if (elapsed > 60_000) {
-                    log.warn("[CrafterConnect] Watchdog: No response from server for {}s (half-open connection). Resetting socket...", elapsed / 1000);
+                long elapsed = System.currentTimeMillis() - lastReceivedTimestamp;
+                // DEAD_AFTER_SECONDS boyunca hiçbir veri ya da pong gelmediyse soket yarı açık kabul edilir
+                if (elapsed > DEAD_AFTER_SECONDS * 1000L) {
+                    log.warn("[CrafterConnect] No response from server for " + elapsed / 1000 + "s. Resetting the connection...");
                     try {
                         closeConnection(1006, "Watchdog timeout");
                     } catch (Exception e) {
-                        try { close(); } catch (Exception ignored) {}
+                        try { close(); } catch (Exception ignored) { /* kapalı */ }
                     }
                     scheduleReconnect();
                 }
             } else if (!isReconnecting.get()) {
-                log.warn("[CrafterConnect] Watchdog: Socket is closed and no reconnect is scheduled. Triggering reconnect...");
                 scheduleReconnect();
             }
         } catch (Throwable t) {
-            log.error("[CrafterConnect] Watchdog error: {}", t.getMessage());
+            log.error("[CrafterConnect] Watchdog error: " + t.getMessage());
         }
     }
 
     private synchronized void scheduleReconnect() {
-        if (!running.get() || !config.isConfigured()) return;
-
+        if (!running.get() || stopReconnecting) return;
         if (isOpen()) {
             isReconnecting.set(false);
             return;
         }
-
-        if (isReconnecting.get()) {
-            return;
-        }
-
+        if (isReconnecting.get()) return;
         isReconnecting.set(true);
 
         int maxAttempts = config.getMaxReconnectAttempts();
         int attempts = reconnectAttempts.incrementAndGet();
-
         if (maxAttempts > 0 && attempts > maxAttempts) {
-            log.error("[CrafterConnect] Reconnect aborted: maximum attempts ({}) reached.", maxAttempts);
+            log.error("[CrafterConnect] Reconnect stopped: maximum attempts (" + maxAttempts + ") reached.");
             isReconnecting.set(false);
             return;
         }
-
-        int baseDelay = Math.max(1, config.getReconnectDelaySeconds());
-        // Exponential backoff capped at 60 seconds
-        int delay = Math.min(baseDelay * Math.min(attempts, 12), 60);
-
-        log.info("[CrafterConnect] Reconnecting in {} seconds (attempt #{})...", delay, attempts);
+        int delay = backoff.delaySeconds(attempts);
+        log.info("[CrafterConnect] Reconnecting in " + delay + " seconds (attempt #" + attempts + ")...");
 
         cancelReconnectFuture();
         if (scheduler == null || scheduler.isShutdown()) {
             isReconnecting.set(false);
             return;
         }
-
         reconnectFuture = scheduler.schedule(() -> {
+            boolean open = false;
             try {
-                if (running.get() && config.isConfigured() && !isOpen()) {
-                    log.info("[CrafterConnect] Attempting to reconnect (attempt #{})...", attempts);
-                    reconnect();
-                }
+                // Bloklayan sürüm: el sıkışma bitmeden "bağlanamadı" sanılıp yeni deneme planlanmaz
+                if (running.get() && !stopReconnecting && !isOpen()) open = reconnectBlocking();
+                else open = isOpen();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Throwable t) {
-                log.error("[CrafterConnect] Reconnect attempt failed unexpectedly: {}", t.getMessage());
+                log.error("[CrafterConnect] Reconnect attempt failed: " + t.getMessage());
             } finally {
-                if (!isOpen()) {
-                    isReconnecting.set(false);
-                    scheduleReconnect();
-                } else {
-                    isReconnecting.set(false);
-                }
+                isReconnecting.set(false);
+                if (!open && !isOpen()) scheduleReconnect();
             }
         }, delay, TimeUnit.SECONDS);
     }
@@ -368,162 +437,152 @@ public class CrafterWebSocketClient extends WebSocketClient {
     private synchronized void cancelReconnectFuture() {
         if (reconnectFuture != null && !reconnectFuture.isDone()) {
             reconnectFuture.cancel(false);
-            reconnectFuture = null;
         }
+        reconnectFuture = null;
     }
+
+    // --- Oyuncu olayları ---
 
     private void syncOnlinePlayers() {
-        if (playerManager == null) return;
         try {
             for (String username : playerManager.getOnlineUsernames()) {
-                sendPlayerJoin(username);
+                sendPlayerEvent("player_join", username, null);
             }
         } catch (Exception e) {
-            log.error("[CrafterConnect] Error synchronizing online players on reconnect: {}", e.getMessage());
+            log.error("[CrafterConnect] Error synchronizing online players: " + e.getMessage());
         }
     }
 
-    public void onPlayerJoin(String username) {
-        // Send join notification to backend
-        sendPlayerJoin(username);
-
-        // Fetch chest content for the player initially
-        getChest(username);
-
-        ConcurrentLinkedQueue<PendingCommand> queue = offlineQueue.remove(username);
-        if (queue != null) {
-            while (!queue.isEmpty()) {
-                PendingCommand pc = queue.poll();
-                if (pc != null) {
-                    boolean success = executor.execute(pc);
-                    if (success && pc.getCommandId() != null) {
-                        sendAck(pc.getCommandId());
-                    }
-                }
-            }
-        }
+    /** Oyuncu girdi: backend'e bildirir, sandığı ister; kuyruk çekirdek serviste işlenir */
+    public void onPlayerJoin(String username, PlayerIdentity identity) {
+        if (config.isReportPlayers()) sendPlayerEvent("player_join", username, identity);
+        getChest(username, identity);
     }
 
-    private void sendPlayerJoin(String username) {
+    public void onPlayerQuit(String username, PlayerIdentity identity) {
+        if (config.isReportPlayers()) sendPlayerEvent("player_left", username, identity);
+    }
+
+    private void sendPlayerEvent(String event, String username, PlayerIdentity identity) {
         JsonObject data = new JsonObject();
         data.addProperty("username", username);
-        sendEvent("player_join", data);
-    }
-
-    public void onPlayerQuit(String username) {
-        sendPlayerLeft(username);
-    }
-
-    private void sendPlayerLeft(String username) {
-        JsonObject data = new JsonObject();
-        data.addProperty("username", username);
-        sendEvent("player_left", data);
+        addIdentity(data, username, identity);
+        sendEvent(event, data);
     }
 
     public void getProducts() {
         sendEvent("get_products", new JsonObject());
     }
 
-    public void purchaseProduct(String username, String productId) {
+    public void purchaseProduct(String username, PlayerIdentity identity, String productId) {
         JsonObject data = new JsonObject();
         data.addProperty("username", username);
+        addIdentity(data, username, identity);
         data.addProperty("productId", productId);
         sendEvent("purchase_product", data);
     }
 
-    public void getChest(String username) {
+    public void getChest(String username, PlayerIdentity identity) {
         JsonObject data = new JsonObject();
         data.addProperty("username", username);
+        addIdentity(data, username, identity);
         sendEvent("get_chest", data);
     }
 
-    public void useChestItem(String username, String chestItemId) {
+    public void useChestItem(String username, PlayerIdentity identity, String chestItemId) {
         JsonObject data = new JsonObject();
         data.addProperty("username", username);
+        addIdentity(data, username, identity);
         data.addProperty("chestItemId", chestItemId);
         sendEvent("use_chest_item", data);
     }
 
-    private void sendEvent(String eventName, JsonObject data) {
-        if (!isOpen()) return;
-        try {
-            JsonObject json = new JsonObject();
-            json.addProperty("event", eventName);
-            json.add("data", data);
-            send(gson.toJson(json));
-        } catch (Exception e) {
-            log.error("[CrafterConnect] Failed to send event {}: {}", eventName, e.getMessage());
-        }
+    private void addIdentity(JsonObject data, String username, PlayerIdentity identity) {
+        PlayerIdentity id = identity != null ? identity : new PlayerIdentity(PlayerIdentity.MINECRAFT_JAVA, username);
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", id.getType());
+        obj.addProperty("value", id.getValue());
+        data.add("identity", obj);
     }
 
-    // --- Message Handlers for Marketplace ---
+    // --- Mağaza mesajları ---
+
+    private void handlePlayerInfo(CrafterMessage message) {
+        if (message.getPayload() == null) return;
+        PlayerData data = gson.fromJson(message.getPayload(), PlayerData.class);
+        playerManager.updatePlayer(data);
+    }
+
+    private void handleStatistics(CrafterMessage message) {
+        if (message.getData() == null) return;
+        StatisticsData stats = gson.fromJson(message.getData(), StatisticsData.class);
+        statsManager.updateStats(stats);
+    }
 
     private void handleProductsList(CrafterMessage message) {
-        JsonObject payload = message.getPayload().getAsJsonObject();
-        List<Product> products = gson.fromJson(payload.get("products"), new com.google.gson.reflect.TypeToken<List<Product>>(){}.getType());
-        List<Category> categories = gson.fromJson(payload.get("categories"), new com.google.gson.reflect.TypeToken<List<Category>>(){}.getType());
-        
-        if (marketManager != null) {
-            marketManager.updateMarket(products, categories);
-            log.info("[CrafterConnect] Market updated with {} products and {} categories.", products.size(), categories.size());
-        }
+        JsonObject payload = message.getPayload();
+        if (payload == null) return;
+        List<Product> products = gson.fromJson(payload.get("products"), new TypeToken<List<Product>>() {}.getType());
+        List<Category> categories = gson.fromJson(payload.get("categories"), new TypeToken<List<Category>>() {}.getType());
+        if (products == null) products = new ArrayList<>();
+        if (categories == null) categories = new ArrayList<>();
+        marketManager.updateMarket(products, categories);
+        log.debug("[CrafterConnect] Market updated: " + products.size() + " products, " + categories.size() + " categories.");
     }
 
     private void handlePurchaseResponse(CrafterMessage message) {
-        JsonObject payload = message.getPayload().getAsJsonObject();
-        String username = payload.get("username").getAsString();
-        boolean success = payload.get("success").getAsBoolean();
-        String msg = payload.get("message").getAsString();
-        
+        JsonObject payload = message.getPayload();
+        String username = str(payload, "username");
+        if (username == null) return;
+        boolean success = payload.has("success") && payload.get("success").getAsBoolean();
+        String msg = Objects.requireNonNullElse(str(payload, "message"), "");
         if (success) {
-            // Satın alım sonrası hem sandığı hem de oyuncu bilgilerini (bakiye) anında tazele
-            getChest(username);
-            sendPlayerJoin(username);
+            // Satın alma sonrası sandık ve bakiye tazelenir
+            getChest(username, null);
+            sendPlayerEvent("player_join", username, null);
         }
-
-        executor.handlePurchaseResponse(username, success, msg);
+        platform.handlePurchaseResponse(username, success, msg);
     }
 
     private void handleChestContent(CrafterMessage message) {
-        JsonObject payload = message.getPayload().getAsJsonObject();
-        String username = payload.get("username").getAsString();
-        List<ChestItem> items = gson.fromJson(payload.get("items"), new com.google.gson.reflect.TypeToken<List<ChestItem>>(){}.getType());
-        
-        if (marketManager != null) {
-            marketManager.updatePlayerChest(username, items);
-            log.info("[CrafterConnect] Chest updated for {}: {} items", username, items.size());
-        }
+        JsonObject payload = message.getPayload();
+        String username = str(payload, "username");
+        if (username == null) return;
+        List<ChestItem> items = gson.fromJson(payload.get("items"), new TypeToken<List<ChestItem>>() {}.getType());
+        marketManager.updatePlayerChest(username, items == null ? new ArrayList<>() : items);
     }
 
     private void handleUseItemResponse(CrafterMessage message) {
-        JsonObject payload = message.getPayload().getAsJsonObject();
-        String username = payload.get("username").getAsString();
-        boolean success = payload.get("success").getAsBoolean();
-        String msg = payload.get("message").getAsString();
-        
+        JsonObject payload = message.getPayload();
+        String username = str(payload, "username");
+        if (username == null) return;
+        boolean success = payload.has("success") && payload.get("success").getAsBoolean();
+        String msg = Objects.requireNonNullElse(str(payload, "message"), "");
+        LanguageManager lang = languageManager.get();
         if (success) {
-            // Eşya kullanımı sonrası hem sandığı hem de oyuncu bilgilerini (bakiye/rol) anında tazele
-            getChest(username);
-            sendPlayerJoin(username);
-
-            // Backend mesajı yerine dil dosyasındaki mesajı kullan
-            executor.sendMessage(username, languageManager.getMessage("prefix") + 
-                    languageManager.getMessage("item_used_success", msg)); 
+            getChest(username, null);
+            sendPlayerEvent("player_join", username, null);
+            platform.sendMessage(username, lang.getMessage("prefix") + lang.getMessage("item_used_success", msg));
         } else {
-            executor.sendMessage(username, languageManager.getMessage("prefix") + 
-                    languageManager.getMessage("item_used_error", msg));
+            platform.sendMessage(username, lang.getMessage("prefix") + lang.getMessage("item_used_error", msg));
         }
     }
 
-    private void addToQueue(String player, PendingCommand pc) {
-        offlineQueue.computeIfAbsent(player.toLowerCase(), k -> new ConcurrentLinkedQueue<>()).add(pc);
-    }
-
-    public int getOfflineQueueSize() {
-        return offlineQueue.values().stream().mapToInt(ConcurrentLinkedQueue::size).sum();
+    private static String str(JsonObject obj, String key) {
+        if (obj == null || !obj.has(key) || obj.get(key).isJsonNull() || !obj.get(key).isJsonPrimitive()) return null;
+        return obj.get(key).getAsString();
     }
 
     public boolean isConnected() {
-        return isOpen();
+        return isOpen() && authenticated.get();
+    }
+
+    /** Son hata kodu (server_token_invalid, LICENSE_ERROR …), yoksa null */
+    public String lastError() {
+        return lastError;
+    }
+
+    public boolean isStopped() {
+        return stopReconnecting;
     }
 }

@@ -7,7 +7,7 @@
     <parent>
         <groupId>net.crafter</groupId>
         <artifactId>crafter-connect-parent</artifactId>
-        <version>1.0.5</version>
+        <version>2.0.0</version>
     </parent>
 
     <artifactId>crafter-connect-core</artifactId>
@@ -20,12 +20,12 @@
             <artifactId>Java-WebSocket</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -33,4 +33,24 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <resources>
+            <!-- Sürüm bilgisi (BuildInfo) Maven sürümünden doldurulur -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>crafter-connect-build.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>crafter-connect-build.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
+    </build>
 </project>

@@ -12,38 +12,92 @@ CrafterConnect, oyuncuları sunucuya giriş yaptıkları **kullanıcı isimleri 
 
 ---
 
-## 🚀 Kurulum ve Kullanım
+## 🚀 Kurulum ve Kullanım (2.0)
 
-### 1. Eklentiyi Yükleme
+### 1. Eklentiyi yükleme
 
-- **Spigot:** `spigot/target/crafter-connect-spigot-1.0.5.jar` dosyasını `plugins/` klasörüne kopyalayın.
-- **Velocity:** `velocity/target/crafter-connect-velocity-1.0.5.jar` dosyasını `plugins/` klasörüne kopyalayın.
+| Platform | Dosya | Klasör |
+| :-- | :-- | :-- |
+| Paper / Spigot / Folia (1.18+) | `crafter-connect-spigot-2.0.0.jar` | sunucunun `plugins/` klasörü |
+| Velocity | `crafter-connect-velocity-2.0.0.jar` | proxy'nin `plugins/` klasörü |
+| BungeeCord / Waterfall | `crafter-connect-bungee-2.0.0.jar` | proxy'nin `plugins/` klasörü |
 
-### 2. Yapılandırma (Config)
+Proxy'de teslimat komutları proxy konsolunda çalışır. Arka sunucuda çalışması gereken komutlar (ör. `give`) için
+arka sunuculara da Paper eklentisini kurun; her kurulum Crafter'da ayrı bir sunucu olarak bağlanır. Proxy'de de
+eklenti varsa arka sunuculardaki `config.yml` içinde `report-players: false` yapın (oyuncular iki kez sayılmaz).
 
-`plugins/CrafterConnect/config.yml` dosyasını panel bilgilerinizle düzenleyin:
+### 2. Bağlama
+
+1. Panelde **Ayarlar → Sunucular → Sunucu bağla** ile bağlantı kodu üretin (15 dakika geçerli, tek kullanımlık).
+2. Konsolda (ya da `crafter.admin` yetkisiyle oyunda) çalıştırın:
+
+```text
+/crafter connect K7QM-4XPD
+```
+
+Eklenti kendini kaydeder, sunucuya özel **sunucu token'ını** (`cct_…`) `config.yml` dosyasına yazar ve dosyanın
+iznini yalnızca sunucu kullanıcısına (600) düşürür. Token loglara ve sohbete yazılmaz. Website ID, secret ya da
+server ID kopyalamanız gerekmez. Makine değişince ya da token sızdıysa panelde **Yeniden bağla** ile yeni kod üretip
+aynı komutu çalıştırın; eski token hemen geçersiz olur.
+
+**Eski kurulumlar:** `website-id`, `plugin-secret`, `server-id` dolu ve `server-token` boşsa eklenti eski yöntemle
+bağlanmaya devam eder ve konsolda "Panelden yeni kod üretip /crafter connect çalıştırın" uyarısı gösterir.
+
+### 3. Yapılandırma (`config.yml`)
 
 ```yaml
 api-url: "api.crafter.net.tr"
-website-id: "YOUR_WEBSITE_ID"
-plugin-secret: "YOUR_PLUGIN_SECRET"
-server-id: "YOUR_SERVER_ID"
-language: "tr" # tr veya en
-use-ssl: true # SSL kullanıyorsanız true (api.crafter.net.tr için zorunlu)
+server-token: ""                 # /crafter connect yazar; elle girmeyin, paylaşmayın
+language: "tr"                   # tr veya en
+allowed-command-prefixes: []     # doluysa yalnızca bu öneklerle başlayan komutlar çalışır (örn. ["lp user", "give"])
+report-players: true             # proxy arkasındaki sunucularda false
+debug-mode: false
 ```
 
-### 3. Komutlar ve Yetkiler
+### 4. Komutlar ve yetkiler
 
-| Komut                          | Yetki           | Açıklama                                                        |
-| :----------------------------- | :-------------- | :-------------------------------------------------------------- |
-| `/crafter magaza`              | `crafter.shop`  | Web sitenizdeki ürünleri oyun içinde kategori bazlı görüntüler. |
-| `/crafter magaza <categoryId>` | `crafter.shop`  | Doğrudan belirli bir kategoriyi açar.                           |
-| `/crafter sandik`              | `crafter.chest` | Satın aldığınız ama henüz teslim almadığınız eşyaları listeler. |
-| `/crafter status`              | `crafter.admin` | WebSocket bağlantı durumunu ve bekleyen komutları gösterir.     |
-| `/crafter reload`              | `crafter.admin` | Yapılandırmayı ve dil dosyalarını yeniler.                      |
+| Komut | Yetki | Açıklama |
+| :-- | :-- | :-- |
+| `/crafter connect <kod>` | `crafter.admin` | Sunucuyu bağlantı koduyla Crafter'a bağlar (konsoldan da çalışır). |
+| `/crafter disconnect` | `crafter.admin` | Bağlantıyı keser ve sunucu token'ını siler. |
+| `/crafter status` | `crafter.admin` | Bağlantı, mağaza, sunucu ID, sürüm ve bekleyen komutlar. |
+| `/crafter reload` | `crafter.admin` | Ayar ve dil dosyalarını yeniler, yeniden bağlanır. |
+| `/crafter magaza [kategori]` | `crafter.shop` | Oyun içi mağaza (Paper/Spigot). |
+| `/crafter sandik` | `crafter.chest` | Satın alınan ürünlerin sandığı (Paper/Spigot). |
 
 > [!NOTE]
 > Varsayılan olarak tüm oyunculara yetki vermek isterseniz, LuckPerms gibi bir plugin ile `crafter.shop` ve `crafter.chest` yetkilerini `default` grubuna ekleyebilirsiniz.
+
+### 5. Teslimat ve güvenlik
+
+- **Kalıcı kuyruk:** Oyuncu çevrimdışıysa komut `plugins/CrafterConnect/data/commands.json` dosyasında bekler ve
+  oyuncu girince çalışır (ad büyük/küçük harf duyarsız; Microsoft ile doğrulanmış oyuncuda UUID ile). Sunucu kapalıyken
+  gelen komutları Crafter saklar ve sunucu bağlanınca sırayla gönderir.
+- **Bir kez çalıştırma:** Her komutun `commandId`'si saklanır; aynı komut tekrar gelirse çalıştırılmaz, yalnızca onay
+  yinelenir. Onaylar bağlantı yokken diske yazılır ve bağlanınca gönderilir.
+- **Komut koruması:**
+  - Oyuncu adı (`player` ve eklentinin doldurduğu `%player%`) Java (`[A-Za-z0-9_]{1,16}`) ya da Bedrock/Floodgate
+    (`.` önekli, kelimeler arasında tek boşluk) kuralına uymalı. Bu kural yalnızca oyuncu adına uygulanır; adda boşluk
+    dışında tırnak, `; & | $ @ %` gibi karakterler olamaz.
+  - Komut metninin tamamında satır sonu ve kontrol karakteri reddedilir. Komutun kendisindeki `;` gibi karakterler
+    reddedilmez (komutu satıcı yazar; Bukkit konsolu `;` ile komutu bölmez).
+  - `allowed-command-prefixes` ve paneldeki liste doluysa komut ikisine de uymalı.
+  - Reddedilen komut Crafter'a bildirilir ve sipariş incelemeye düşer; aynı komut tekrar gelirse yine reddedilir.
+- Komutlar konsol yetkisiyle ana thread'de (Folia'da global bölge zamanlayıcısında) çalışır.
+- **Bedrock (Geyser/Floodgate):** Floodgate kuruluysa öneki ondan okunur ve Crafter'a bildirilir.
+
+---
+
+## 🔨 Derleme
+
+Sürüm jar'larını her zaman temiz derlemeyle üretin (eski `target/` dosyaları karışmasın):
+
+```bash
+mvn -B clean package
+```
+
+Jar'lar: `spigot/target/crafter-connect-spigot-<sürüm>.jar`, `velocity/target/…`, `bungee/target/…`
+(`original-*.jar` dosyalarını kullanmayın). Aynı komut GitHub Actions'ta her push ve PR'da çalışır.
 
 ---
 

@@ -1,0 +1,57 @@
+# ╔══════════════════════════════════════════════════════╗
+# ║  CrafterConnect 2.0                                  ║
+# ║  Paper / Spigot, Velocity, BungeeCord                ║
+# ╚══════════════════════════════════════════════════════╝
+#
+# Bağlama / Connecting:
+#   1. Panel → Ayarlar → Sunucular → "Sunucu bağla" ile bağlantı kodu üretin.
+#      Dashboard → Settings → Servers → "Connect a server" and create a connection code.
+#   2. Konsolda (ya da crafter.admin yetkisiyle oyunda) çalıştırın / run in the console:
+#        /crafter connect K7QM-4XPD
+#   Website ID, secret ya da server ID kopyalamanız gerekmez. / No IDs or secrets to copy.
+
+# Crafter API adresi / API address
+api-url: "api.crafter.net.tr"
+
+# Sunucu token'ı / Server token (cct_…): /crafter connect yazar. Elle girmeyin, kimseyle paylaşmayın,
+# ekran görüntüsünde göstermeyin. Sızdığını düşünüyorsanız panelden "Yeniden bağla" ile yenileyin.
+# Written by /crafter connect. Do not edit, share or show it in screenshots.
+server-token: ""
+
+# Dil / Language: tr, en
+language: "tr"
+
+# İzinli komut önekleri / Allowed command prefixes
+# Boş değilse yalnızca bu öneklerle başlayan teslimat komutları çalışır; diğerleri reddedilir ve sipariş
+# incelemeye düşer. Panelden gelen liste de doluysa komut ikisine de uymalıdır.
+# If not empty, only delivery commands starting with one of these run; others are rejected and go to review.
+# Do not allow admin commands such as op, stop, whitelist or execute.
+# Örnek / Example:
+# allowed-command-prefixes:
+#   - "lp user"
+#   - "give"
+#   - "eco give"
+allowed-command-prefixes: []
+
+# Oyuncu giriş/çıkışlarını Crafter'a bildir / Report player joins and leaves.
+# Proxy'de (Velocity/BungeeCord) de CrafterConnect varsa arka sunuculardaki Paper eklentilerinde false yapın;
+# böylece oyuncular iki kez sayılmaz. / Set to false on backend servers when the proxy also runs CrafterConnect.
+report-players: true
+
+# Ayrıntılı log / Verbose logging
+debug-mode: false
+
+# --- Gelişmiş / Advanced ---
+use-ssl: true
+reconnect-delay-seconds: 5
+max-reconnect-attempts: -1
+# Floodgate yoksa Bedrock oyuncu adı öneki (tek karakter, örn. "."). Floodgate kuruluysa öneki ondan okunur.
+# Bedrock name prefix when Floodgate is not installed on this server (single character). Read from Floodgate otherwise.
+bedrock-player-prefix: ""
+
+# --- Eski bağlantı / Legacy connection (2.0 öncesi / before 2.0) ---
+# server-token boşsa ve bu alanlar doluysa eski yöntemle bağlanılır. Panelden "Yeniden bağla" ile 2.0'a geçin.
+# Used only when server-token is empty. Switch with "Reconnect" in the dashboard.
+# website-id: ""
+# plugin-secret: ""
+# server-id: ""

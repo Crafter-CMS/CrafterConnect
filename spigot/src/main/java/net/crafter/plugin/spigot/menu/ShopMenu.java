@@ -87,7 +87,7 @@ public class ShopMenu extends MenuManager.BaseMenu {
             if (clicked.getItemMeta().getDisplayName().contains(product.getName())) {
                 player.sendMessage(plugin.getLanguageManager().getMessage("prefix") + 
                         plugin.getLanguageManager().getMessage("purchase_processing", product.getName()));
-                plugin.getWsClient().purchaseProduct(player.getName(), product.getId());
+                plugin.getService().purchaseProduct(player.getName(), player.getUniqueId(), product.getId());
                 player.closeInventory();
                 return;
             }

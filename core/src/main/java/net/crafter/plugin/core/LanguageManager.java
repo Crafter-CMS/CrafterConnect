@@ -3,9 +3,10 @@ package net.crafter.plugin.core;
 import java.util.HashMap;
 import java.util.Map;
 
+/** Dil dosyası mesajları ({0}, {1} … yer tutucularıyla) */
 public class LanguageManager {
     private final Map<String, String> messages = new HashMap<>();
-    private String language;
+    private final String language;
 
     public LanguageManager(String language) {
         this.language = language;
@@ -14,6 +15,10 @@ public class LanguageManager {
     public void setMessages(Map<String, String> newMessages) {
         messages.clear();
         messages.putAll(newMessages);
+    }
+
+    public boolean has(String key) {
+        return messages.containsKey(key);
     }
 
     public String getMessage(String key) {
@@ -30,5 +35,10 @@ public class LanguageManager {
 
     public String getLanguage() {
         return language;
+    }
+
+    /** Konsol için § renk kodlarını atar */
+    public static String stripColors(String text) {
+        return text == null ? "" : text.replaceAll("§[0-9a-fk-orA-FK-OR]", "");
     }
 }

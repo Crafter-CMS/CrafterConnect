@@ -1,0 +1,6 @@
+name: CrafterConnect
+version: '${project.version}'
+main: net.crafter.plugin.bungee.CrafterBungeePlugin
+author: Crafter
+description: Crafter store delivery for BungeeCord / Waterfall
+softDepends: [floodgate]
