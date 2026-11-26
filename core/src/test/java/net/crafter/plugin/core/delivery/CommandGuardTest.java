@@ -28,7 +28,7 @@ class CommandGuardTest {
     void acceptsFloodgateNamesWithDefaultPrefixAndSpaces() {
         assertNull(guard.check(cmd("give %player% diamond 1", ".Steve")));
         assertNull(guard.check(cmd("lp user %player% parent add vip", ".Cool Gamer")));
-        // Öneksiz boşluklu ad yalnızca Bedrock kimliğinde
+        // A spaced name without a prefix is allowed only for a Bedrock identity
         assertEquals(CommandGuard.REASON_PLAYER_INVALID, guard.check(cmd("give %player% x", "Cool Gamer")));
         PendingCommand bedrock = cmd("give %player% x", "Cool Gamer");
         bedrock.setIdentity(new PlayerIdentity("minecraft_bedrock", "Cool Gamer"));
@@ -42,7 +42,7 @@ class CommandGuardTest {
         assertNull(g.check(cmd("give %player% x", "*Steve")));
         assertNull(g.check(cmd("give %player% x", ".Steve")));
         assertEquals(CommandGuard.REASON_PLAYER_INVALID, g.check(cmd("give %player% x", "!Steve")));
-        // Geçersiz önek ayarı yok sayılır
+        // An invalid prefix setting is ignored
         assertFalse(CommandGuard.isValidFloodgatePrefix(".."));
         assertFalse(CommandGuard.isValidFloodgatePrefix(";"));
     }
@@ -89,7 +89,7 @@ class CommandGuardTest {
         assertNull(guard.check(pc));
         pc.setIdentity(new PlayerIdentity("minecraft_uuid", "069a79f4 op"));
         assertEquals(CommandGuard.REASON_PLAYER_INVALID, guard.check(pc));
-        pc.setIdentity(new PlayerIdentity("minecraft_java", ".Cool Gamer")); // backend sunucu türünü yazar
+        pc.setIdentity(new PlayerIdentity("minecraft_java", ".Cool Gamer")); // the backend writes the server type
         assertNull(guard.check(pc));
         pc.setIdentity(new PlayerIdentity("steam64", "76561198000000000"));
         assertEquals(CommandGuard.REASON_PLAYER_INVALID, guard.check(pc));
@@ -115,7 +115,7 @@ class CommandGuardTest {
         assertEquals(CommandGuard.REASON_PREFIX_NOT_ALLOWED, both.check(give));
         assertEquals(CommandGuard.REASON_PREFIX_NOT_ALLOWED, both.check(cmd("eco give Notch 5", "Notch")));
 
-        // Ad alanlı komut öneki ayrı sayılır (güvenli taraf)
+        // A namespaced command prefix counts as different (safe side)
         assertEquals(CommandGuard.REASON_PREFIX_NOT_ALLOWED, local.check(cmd("minecraft:give Notch x", "Notch")));
     }
 }

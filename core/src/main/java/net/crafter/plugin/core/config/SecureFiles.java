@@ -9,9 +9,9 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
 
 /**
- * Gizli bilgi taşıyan dosyalar (config.yml içindeki server-token, data/ klasörü) için izin ve atomik yazma.
- * POSIX dosya sistemlerinde dosya 600, klasör 700 yapılır; Windows'ta izin değiştirilmez (sunucu kullanıcısının
- * klasörü varsayılır).
+ * Permissions and atomic writes for files holding secrets (server-token in config.yml, the data/ folder).
+ * On POSIX file systems files become 600 and folders 700; on Windows permissions are left unchanged (the server
+ * user's folder is assumed).
  */
 public final class SecureFiles {
 
@@ -20,7 +20,7 @@ public final class SecureFiles {
 
     private SecureFiles() {}
 
-    /** Dosyayı yalnızca sahibinin okuyup yazabileceği hale getirir. Başarılıysa ya da POSIX değilse true. */
+    /** Makes the file readable and writable by its owner only. True on success or if not POSIX. */
     public static boolean restrictFile(Path file) {
         try {
             if (!Files.exists(file) || Files.getFileAttributeView(file, PosixFileAttributeView.class) == null) return true;
@@ -38,11 +38,11 @@ public final class SecureFiles {
                 Files.setPosixFilePermissions(dir, DIR_PERMS);
             }
         } catch (IOException | UnsupportedOperationException ignored) {
-            // izin değiştirilemiyorsa klasör yine kullanılır
+            // if permissions cannot be changed, the folder is still used
         }
     }
 
-    /** Grup ya da diğer kullanıcılar dosyayı okuyabiliyor mu (POSIX değilse false) */
+    /** Whether group or other users can read the file (false if not POSIX) */
     public static boolean isReadableByOthers(Path file) {
         try {
             if (!Files.exists(file) || Files.getFileAttributeView(file, PosixFileAttributeView.class) == null) return false;
@@ -53,7 +53,7 @@ public final class SecureFiles {
         }
     }
 
-    /** İçeriği aynı klasörde geçici dosyaya yazıp yerine taşır; dosya 600 olur. */
+    /** Writes the content to a temp file in the same folder and moves it into place; the file becomes 600. */
     public static void writeAtomically(Path file, String content) throws IOException {
         Path abs = file.toAbsolutePath();
         Path parent = abs.getParent();

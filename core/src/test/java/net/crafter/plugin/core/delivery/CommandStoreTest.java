@@ -69,7 +69,7 @@ class CommandStoreTest {
         store.finishRun("cmd_n", CommandStore.Outgoing.nack("cmd_n", "player_identity_invalid"));
         assertEquals(CommandStore.Outgoing.nack("cmd_n", "player_identity_invalid"), new CommandStore(file).resultOf("cmd_n"));
 
-        // 2.0 geliştirme sürümündeki biçim: sonuç alanı yok
+        // Format from the 2.0 development build: no result field
         Path old = dir.resolve("old.json");
         Files.writeString(old, "{\"version\":2,\"queue\":[],\"processed\":{\"cmd_o\":{\"at\":" + System.currentTimeMillis()
                 + ",\"state\":\"done\"}},\"outbox\":[]}");
@@ -82,7 +82,7 @@ class CommandStoreTest {
     void interruptedRunIsReportedNotRepeated() {
         Path file = dir.resolve("commands.json");
         CommandStore store = new CommandStore(file);
-        assertTrue(store.beginRun("cmd_crash")); // sunucu burada çöktü
+        assertTrue(store.beginRun("cmd_crash")); // the server crashed here
 
         CommandStore reopened = new CommandStore(file);
         assertFalse(reopened.beginRun("cmd_crash"));

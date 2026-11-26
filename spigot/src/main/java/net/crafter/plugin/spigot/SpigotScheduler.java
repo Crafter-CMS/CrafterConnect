@@ -8,9 +8,9 @@ import java.lang.reflect.Method;
 import java.util.function.Consumer;
 
 /**
- * Paper/Spigot ve Folia için zamanlayıcı. Folia'da Bukkit zamanlayıcısı yoktur: konsol komutları global bölge
- * zamanlayıcısında, oyuncu işlemleri (menü açma) oyuncunun kendi zamanlayıcısında çalışır. Folia API'si
- * derleme bağımlılığı olmadan yansıma ile çağrılır.
+ * Scheduler for Paper/Spigot and Folia. Folia has no Bukkit scheduler: console commands run on the global region
+ * scheduler and player actions (opening menus) on the player's own scheduler. The Folia API is called via
+ * reflection without a compile dependency.
  */
 public final class SpigotScheduler {
 
@@ -51,7 +51,7 @@ public final class SpigotScheduler {
         return folia;
     }
 
-    /** Ana thread'de (Folia'da global bölgede) çalıştırır; geliş sırası korunur */
+    /** Runs on the main thread (the global region on Folia); arrival order is preserved */
     public void runGlobal(Runnable task) {
         if (!folia) {
             Bukkit.getScheduler().runTask(plugin, task);
@@ -64,14 +64,14 @@ public final class SpigotScheduler {
         }
     }
 
-    /** Oyuncuya ait işlem (envanter açma vb.); oyuncu çıktıysa çalışmaz */
+    /** Player-bound action (opening an inventory, etc.); does not run if the player has left */
     public void runForPlayer(Player player, Runnable task) {
         runForPlayer(player, task, null);
     }
 
     /**
-     * Oyuncuya ait işlem; Folia'da oyuncu çıkmışsa {@code retired} çalışır (null olabilir). Paper/Spigot'ta ana
-     * thread'de çalışır.
+     * Player-bound action; on Folia {@code retired} runs if the player has left (may be null). On Paper/Spigot it runs
+     * on the main thread.
      */
     public void runForPlayer(Player player, Runnable task, Runnable retired) {
         if (!folia) {
@@ -81,7 +81,7 @@ public final class SpigotScheduler {
         try {
             Consumer<Object> consumer = ignored -> task.run();
             Object scheduled = entityRun.invoke(entityScheduler.invoke(player), plugin, consumer, retired);
-            // run() null dönerse varlık zaten kaldırılmıştır
+            // if run() returns null the entity has already been removed
             if (scheduled == null && retired != null) retired.run();
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);

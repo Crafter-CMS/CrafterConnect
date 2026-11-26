@@ -3,72 +3,64 @@
 # ║  Paper / Spigot, Velocity, BungeeCord                ║
 # ╚══════════════════════════════════════════════════════╝
 #
-# Bağlama / Connecting:
-#   1. Panel → Ayarlar → Sunucular → "Sunucu bağla" ile bağlantı kodu üretin.
-#      Dashboard → Settings → Servers → "Connect a server" and create a connection code.
-#   2. Konsolda (ya da crafter.admin yetkisiyle oyunda) çalıştırın / run in the console:
+# Connecting:
+#   1. Dashboard → Settings → Servers → "Connect a server" and create a connection code.
+#   2. Run in the console (or in game with the crafter.admin permission):
 #        /crafter connect K7QM-4XPD
-#   Website ID, secret ya da server ID kopyalamanız gerekmez. / No IDs or secrets to copy.
+#   No website ID, secret or server ID to copy.
 
-# Crafter API adresi / API address
+# Crafter API address
 api-url: "api.crafter.net.tr"
 
-# Sunucu token'ı / Server token (cct_…): /crafter connect yazar. Elle girmeyin, kimseyle paylaşmayın,
-# ekran görüntüsünde göstermeyin. Sızdığını düşünüyorsanız panelden "Yeniden bağla" ile yenileyin.
-# Written by /crafter connect. Do not edit, share or show it in screenshots.
+# Server token (cct_…): written by /crafter connect. Do not edit it, share it or show it in screenshots.
+# If you think it has leaked, renew it with "Reconnect" in the dashboard.
 server-token: ""
 
-# Dil / Language: tr, en
+# Language: tr, en
 language: "tr"
 
-# İzinli komut önekleri / Allowed command prefixes
-# Boş değilse yalnızca bu öneklerle başlayan teslimat komutları çalışır; diğerleri reddedilir ve sipariş
-# incelemeye düşer. Panelden gelen liste de doluysa komut ikisine de uymalıdır.
+# Allowed command prefixes
 # If not empty, only delivery commands starting with one of these run; others are rejected and go to review.
 # Do not allow admin commands such as op, stop, whitelist or execute.
-# Örnek / Example:
+# Example:
 # allowed-command-prefixes:
 #   - "lp user"
 #   - "give"
 #   - "eco give"
 allowed-command-prefixes: []
 
-# Oyuncu giriş/çıkışlarını Crafter'a bildir / Report player joins and leaves.
-# Proxy'de (Velocity/BungeeCord) de CrafterConnect varsa arka sunuculardaki Paper eklentilerinde false yapın;
-# böylece oyuncular iki kez sayılmaz. / Set to false on backend servers when the proxy also runs CrafterConnect.
+# Report player joins and leaves to Crafter.
+# If the proxy (Velocity/BungeeCord) also runs CrafterConnect, set this to false on the Paper plugins of the backend
+# servers so players are not counted twice.
 report-players: true
 
-# Oynama süresi ve AFK / Playtime and AFK (yalnızca Paper/Spigot / Paper/Spigot only)
-# Süre oyunun kendi istatistiğinden (PLAY_ONE_MINUTE) 5 dakikada bir ve çıkışta gönderilir; çökmede kaybolmaz,
-# bağlantı yokken data/playtime.json'da bekler. Velocity/BungeeCord süre göndermez (oyuncular iki kez sayılmaz).
-# Taken from the game's own statistic every few minutes and on quit; queued in data/playtime.json while offline.
+# Playtime and AFK (Paper/Spigot only)
+# Time is taken from the game's own statistic (PLAY_ONE_MINUTE) every 5 minutes and on quit; it survives a crash and
+# waits in data/playtime.json while disconnected. Velocity/BungeeCord do not send time (players are not counted twice).
 playtime:
   enabled: true
-  # Örnek aralığı (dk) / Sample interval in minutes (1-60)
+  # Sample interval in minutes (1-60)
   sample-minutes: 5
-  # AFK kaynağı / AFK source: auto (Essentials, yoksa CMI, yoksa hareketsizlik), essentials, cmi, idle, none
+  # AFK source: auto (Essentials, otherwise CMI, otherwise idle), essentials, cmi, idle, none
   afk-source: auto
-  # Hareketsizlik eşiği (dk, afk-source idle ya da auto'da eklenti yoksa) / Idle threshold in minutes
+  # Idle threshold in minutes (used for afk-source idle, or auto when no AFK plugin is installed)
   afk-minutes: 5
-  # true: oyuncunun bu sunucudaki geçmiş toplam süresi ilk gönderimde bir kez eklenir. Sunucu daha önce eski
-  # eklentiyle süre sayıyorsa açmayın (çift sayım olur).
-  # true: imports each player's past total once on the first sample. Leave off if this server already reported playtime.
+  # true: each player's past total on this server is imported once with the first sample. Leave off if this server
+  # already counted playtime with the old plugin (it would be counted twice).
   import-history: false
 
-# Ayrıntılı log / Verbose logging
+# Verbose logging
 debug-mode: false
 
-# --- Gelişmiş / Advanced ---
+# --- Advanced ---
 use-ssl: true
 reconnect-delay-seconds: 5
 max-reconnect-attempts: -1
-# Floodgate yoksa Bedrock oyuncu adı öneki (tek karakter, örn. "."). Floodgate kuruluysa öneki ondan okunur.
-# Bedrock name prefix when Floodgate is not installed on this server (single character). Read from Floodgate otherwise.
+# Bedrock player name prefix when Floodgate is not installed (single character, e.g. "."). Read from Floodgate otherwise.
 bedrock-player-prefix: ""
 
-# --- Eski bağlantı / Legacy connection (2.0 öncesi / before 2.0) ---
-# server-token boşsa ve bu alanlar doluysa eski yöntemle bağlanılır. Panelden "Yeniden bağla" ile 2.0'a geçin.
-# Used only when server-token is empty. Switch with "Reconnect" in the dashboard.
+# --- Legacy connection (before 2.0) ---
+# Used only when server-token is empty and these fields are set. Switch to 2.0 with "Reconnect" in the dashboard.
 # website-id: ""
 # plugin-secret: ""
 # server-id: ""

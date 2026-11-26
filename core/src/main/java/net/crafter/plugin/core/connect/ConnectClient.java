@@ -10,12 +10,12 @@ import java.net.URI;
 import java.util.Map;
 
 /**
- * CrafterConnect v2 HTTP uçları (#369 4.3, 4.6):
+ * CrafterConnect v2 HTTP endpoints (#369 4.3, 4.6):
  * <ul>
- *   <li>{@code POST /plugin/v2/connect}: bağlantı kodu → sunucu token'ı. Kimlik doğrulama koddur.</li>
- *   <li>{@code GET /website/{websiteId}/config/servers/games}: platformun asgari eklenti sürümü.</li>
+ *   <li>{@code POST /plugin/v2/connect}: link code → server token. The code is the authentication.</li>
+ *   <li>{@code GET /website/{websiteId}/config/servers/games}: the platform's minimum plugin version.</li>
  * </ul>
- * Yanıt gövdesi (token içerir) loglanmaz.
+ * The response body (contains the token) is never logged.
  */
 public final class ConnectClient {
 
@@ -64,7 +64,7 @@ public final class ConnectClient {
         throw errorOf(res);
     }
 
-    /** Platformun katalogdaki asgari sürümü; okunamazsa null */
+    /** The platform's minimum version in the catalog; null if it cannot be read */
     public String fetchMinVersion(String websiteId, String platform) {
         if (websiteId == null || !websiteId.matches("^[A-Za-z0-9_-]{1,64}$")) return null;
         try {
@@ -84,7 +84,7 @@ public final class ConnectClient {
                 }
             }
         } catch (Exception ignored) {
-            // ağ ya da biçim hatası eklentinin çalışmasını etkilemez
+            // a network or format error does not affect the plugin
         }
         return null;
     }

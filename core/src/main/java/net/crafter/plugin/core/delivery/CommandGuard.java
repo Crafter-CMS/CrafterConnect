@@ -10,21 +10,21 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
- * Konsolda tam yetkiyle çalışacak komutun ikinci savunma hattı (#286, #37 bölüm 3.4). Backend değerleri zaten
- * doğrular; buradaki kontroller backend'de bir açık kalsa bile konsola zararlı komut gitmesini engeller.
+ * Second line of defense for a command that will run on the console with full permissions (#286, #37 section 3.4). The backend
+ * already validates the values; these checks stop a harmful command reaching the console even if the backend has a hole.
  *
  * <ul>
- *   <li>Oyuncu adı backend'in teslimat kuralına uymalı (backend {@code isDeliverableUsername}, #247): Java adı
- *   {@code [A-Za-z0-9_]{1,16}}; Bedrock/Floodgate adı {@code .} (ya da sunucudaki Floodgate öneki) ile başlar ve
- *   kelimeler arasında tek boşluk olabilir (en çok 17 karakter). Öneksiz boşluklu ad yalnızca kimlik türü
- *   minecraft_bedrock ise kabul edilir. Tırnak, {@code \ ; & | $ ` @ %}, satır sonu ve kontrol karakteri hiçbir
- *   durumda geçmez. Boşluklu ad {@code %player%} yerine çift tırnak içinde tek argüman olarak yazılır.</li>
- *   <li>Kimlik ({@code identity}) kendi türünün desenine uymalı (UUID yalnızca hex).</li>
- *   <li>Satır sonu ya da başka bir kontrol karakteri içeren komut çalışmaz.</li>
- *   <li>İzinli önek listesi: yerel {@code allowed-command-prefixes} ve backend'in {@code settings.allowedCommandPrefixes}
- *   listesinin ikisi de dolu ise komut ikisinden de geçmelidir (kesişim); yalnızca biri doluysa o geçerlidir.</li>
+ *   <li>The player name must follow the backend's delivery rule (backend {@code isDeliverableUsername}, #247): a Java name is
+ *   {@code [A-Za-z0-9_]{1,16}}; a Bedrock/Floodgate name starts with {@code .} (or the server's Floodgate prefix) and
+ *   may have single spaces between words (at most 17 characters). A spaced name without a prefix is accepted only when the
+ *   identity type is minecraft_bedrock. Quotes, {@code \ ; & | $ ` @ %}, line breaks and control characters are never
+ *   allowed. A spaced name is written in place of {@code %player%} as a single double-quoted argument.</li>
+ *   <li>The identity ({@code identity}) must match its type's pattern (UUID is hex only).</li>
+ *   <li>A command containing a line break or any other control character never runs.</li>
+ *   <li>Allowed prefix list: if both the local {@code allowed-command-prefixes} and the backend's {@code settings.allowedCommandPrefixes}
+ *   are set, the command must pass both (intersection); if only one is set, that one applies.</li>
  * </ul>
- * Uymayan komut çalıştırılmaz, NACK gönderilir ve sipariş incelemeye düşer.
+ * A non-matching command is not run, a NACK is sent and the order goes to review.
  */
 public final class CommandGuard {
 
@@ -37,11 +37,11 @@ public final class CommandGuard {
     private static final Pattern JAVA_NAME = Pattern.compile("^[A-Za-z0-9_]{1,16}$");
     private static final Pattern MC_WORDS = Pattern.compile("^[A-Za-z0-9_]+(?: [A-Za-z0-9_]+)*$");
     private static final int MAX_NAME_LENGTH = 17;
-    /** Floodgate'in varsayılan öneki; backend de her zaman kabul eder */
+    /** Floodgate's default prefix; the backend always accepts it too */
     public static final String DEFAULT_FLOODGATE_PREFIX = ".";
     private static final Pattern UUID_PATTERN =
             Pattern.compile("^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32})$");
-    /** Floodgate öneki olarak kabul edilen tek karakterler (backend de tek karakter saklar) */
+    /** Single characters accepted as a Floodgate prefix (the backend also stores a single character) */
     public static final String PREFIX_CHARACTERS = ".*!~+-#";
 
     private final List<String> bedrockPrefixes;
@@ -50,8 +50,8 @@ public final class CommandGuard {
     private final List<String> remotePrefixes;
 
     /**
-     * @param floodgatePrefix    sunucudaki Floodgate öneki (yoksa null); "." her zaman kabul edilir
-     * @param serverIdentityType auth_success'teki identityType (minecraft_java | minecraft_bedrock), bilinmiyorsa null
+     * @param floodgatePrefix    the server's Floodgate prefix (null if none); "." is always accepted
+     * @param serverIdentityType identityType from auth_success (minecraft_java | minecraft_bedrock), null if unknown
      */
     public CommandGuard(String floodgatePrefix, String serverIdentityType, List<String> localPrefixes, List<String> remotePrefixes) {
         List<String> prefixes = new ArrayList<>();
@@ -75,12 +75,12 @@ public final class CommandGuard {
         return p.length() == 1 && PREFIX_CHARACTERS.contains(p);
     }
 
-    /** Oyuncu adı sunucunun kimlik türüne göre teslim edilebilir mi */
+    /** Whether the player name is deliverable for the server's identity type */
     public boolean isValidPlayer(String player) {
         return isDeliverable(player, serverIdentityType);
     }
 
-    /** Backend {@code isDeliverableUsername} ile aynı kural (Minecraft türleri) */
+    /** Same rule as the backend's {@code isDeliverableUsername} (Minecraft types) */
     public boolean isDeliverable(String value, String identityType) {
         if (value == null || value.isEmpty() || value.length() > MAX_NAME_LENGTH) return false;
         if (JAVA_NAME.matcher(value).matches()) return true;
@@ -94,11 +94,11 @@ public final class CommandGuard {
     }
 
     /**
-     * @return null → çalıştırılabilir; aksi halde NACK nedeni
+     * @return null → runnable; otherwise the NACK reason
      */
     public String check(PendingCommand pc) {
         if (pc.getCommand() == null || pc.getCommand().isBlank()) return REASON_EMPTY_COMMAND;
-        // Ham şablon da kontrol edilir: değerler eklenmeden önce satır sonu taşıyorsa reddedilir
+        // The raw template is checked too: rejected if it carries a line break before values are filled in
         if (CONTROL_CHARACTER.matcher(pc.getCommand()).find()) return REASON_CONTROL_CHARACTER;
 
         String type = effectiveIdentityType(pc);
@@ -119,9 +119,9 @@ public final class CommandGuard {
         if (type == null || value == null) return false;
         return switch (type) {
             case PlayerIdentity.MINECRAFT_UUID -> UUID_PATTERN.matcher(value).matches();
-            // Backend sunucunun türünü yazar; Floodgate adı minecraft_java türüyle de gelebilir
+            // The backend writes the server's type; a Floodgate name may also arrive with the minecraft_java type
             case PlayerIdentity.MINECRAFT_JAVA, PlayerIdentity.MINECRAFT_BEDROCK -> isDeliverable(value, type);
-            default -> false; // Minecraft sunucusunda başka kimlik türü beklenmez
+            default -> false; // no other identity type is expected on a Minecraft server
         };
     }
 
@@ -131,7 +131,7 @@ public final class CommandGuard {
         return serverIdentityType;
     }
 
-    /** Liste boşsa kontrol yok; doluysa kelime sınırında önek eşleşmesi ("give" → "giveall" geçmez) */
+    /** No check if the list is empty; otherwise prefix match on a word boundary ("give" does not pass "giveall") */
     private static boolean matches(List<String> prefixes, String command) {
         if (prefixes.isEmpty()) return true;
         String normalized = normalize(command).toLowerCase(Locale.ROOT);

@@ -1,10 +1,10 @@
 package net.crafter.plugin.core.model;
 
 /**
- * Backend'den gelen teslimat komutu ({@code {"type":"command","payload":{…}}}).
+ * Delivery command from the backend ({@code {"type":"command","payload":{…}}}).
  * <pre>{"commandId":"cmd_…","command":"lp user Notch parent add vip","player":"Notch",
  *  "identity":{"type":"minecraft_uuid","value":"…"},"requireOnline":null}</pre>
- * Backend %username% gibi yer tutucuları kendisi doldurur; eklenti yalnızca {@code %player%}'ı doldurur.
+ * The backend fills placeholders such as %username% itself; the plugin only fills {@code %player%}.
  */
 public class PendingCommand {
 
@@ -14,9 +14,9 @@ public class PendingCommand {
     private String command;
     private String player;
     private PlayerIdentity identity;
-    /** null: oyuncu varsa çevrimiçi olmasını bekle; false: hemen çalıştır; true: bekle */
+    /** null: wait for the player to be online if there is a player; false: run now; true: wait */
     private Boolean requireOnline;
-    /** Eklenti kuyruğuna alındığı an (epoch ms); yalnızca yerel */
+    /** When it was added to the plugin queue (epoch ms); local only */
     private long queuedAt;
 
     public PendingCommand() {}
@@ -49,20 +49,20 @@ public class PendingCommand {
         return player != null && !player.isBlank();
     }
 
-    /** Komut oyuncunun çevrimiçi olmasını bekler mi */
+    /** Whether the command waits for the player to be online */
     public boolean waitsForPlayer() {
         return hasPlayer() && !Boolean.FALSE.equals(requireOnline);
     }
 
-    /** Doğrulanmış UUID (identity minecraft_uuid ise), yoksa null */
+    /** Verified UUID (if identity is minecraft_uuid), otherwise null */
     public String verifiedUuid() {
         if (identity == null || !PlayerIdentity.MINECRAFT_UUID.equals(identity.getType())) return null;
         return identity.getValue();
     }
 
     /**
-     * Konsola gidecek komut: baştaki "/" atılır ve %player% oyuncu adıyla doldurulur. Oyuncu adı önce
-     * {@link net.crafter.plugin.core.delivery.CommandGuard} ile doğrulanmalıdır.
+     * Command sent to the console: the leading "/" is dropped and %player% is filled with the player name. The player name
+     * must be validated first with {@link net.crafter.plugin.core.delivery.CommandGuard}.
      */
     public String resolveCommand() {
         if (command == null) return null;
@@ -71,7 +71,7 @@ public class PendingCommand {
         return resolved.replace(PLAYER_PLACEHOLDER, commandPlayer());
     }
 
-    /** %player% değeri: boşluklu (Bedrock) ad çift tırnak içinde tek argüman olur (backend commandUsername ile aynı) */
+    /** %player% value: a spaced (Bedrock) name becomes a single double-quoted argument (same as backend commandUsername) */
     public String commandPlayer() {
         String p = player == null ? "" : player.trim();
         return p.contains(" ") ? "\"" + p + "\"" : p;
@@ -79,7 +79,7 @@ public class PendingCommand {
 
     @Override
     public String toString() {
-        // Komut metni ve oyuncu adı loglarda gösterilmez
+        // The command text and player name are never shown in logs
         return "PendingCommand{id=" + commandId + "}";
     }
 }

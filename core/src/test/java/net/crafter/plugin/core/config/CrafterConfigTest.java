@@ -95,7 +95,7 @@ public class CrafterConfigTest {
     void readsV2AndOldKeys() {
         java.util.Map<String, Object> m = new java.util.HashMap<>();
         m.put("server-token", "cct_" + "b".repeat(43));
-        m.put("debug", "true"); // 1.x Velocity anahtarı
+        m.put("debug", "true"); // 1.x Velocity key
         m.put("language", "../../etc");
         m.put("report-players", "false");
         m.put("allowed-command-prefixes", java.util.List.of("lp user"));

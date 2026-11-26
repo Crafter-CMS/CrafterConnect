@@ -25,15 +25,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * Velocity bağlantı noktaları. Komutlar proxy konsolunda çalışır; arka sunucuda çalışması gereken komutlar için
- * arka sunuculara Paper eklentisi de kurulur ve her biri ayrı bir CrafterConnect sunucusu olarak bağlanır.
+ * Velocity bindings. Commands run on the proxy console; for commands that must run on a backend server, the Paper
+ * plugin is also installed on the backends and each connects as a separate CrafterConnect server.
  */
 public class VelocityPlatform implements Platform {
 
     private final ProxyServer server;
     private final Path dataDirectory;
     private final CrafterLog log;
-    /** Komutlar geliş sırasıyla, tek tek çalışır */
+    /** Commands run one by one, in arrival order */
     private final ExecutorService commandThread = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "crafter-commands");
         t.setDaemon(true);
@@ -73,7 +73,7 @@ public class VelocityPlatform implements Platform {
 
     @Override
     public boolean isPlayerOnline(String playerName) {
-        // Velocity getPlayer(String) büyük/küçük harf duyarsızdır
+        // Velocity getPlayer(String) is case-insensitive
         return playerName != null && !playerName.isBlank() && server.getPlayer(playerName.trim()).isPresent();
     }
 
@@ -91,7 +91,7 @@ public class VelocityPlatform implements Platform {
     public void handlePurchaseResponse(String username, boolean success, String message) {
         Optional<Player> player = server.getPlayer(username);
         if (player.isEmpty()) return;
-        // Dil dosyası çekirdek serviste; mesaj zaten hazır gelir
+        // The language file lives in the core service; the message arrives ready to send
         player.get().sendMessage(legacy((success ? "§a✔ " : "§c✖ ") + message));
     }
 

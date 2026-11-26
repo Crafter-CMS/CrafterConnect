@@ -16,9 +16,9 @@ import net.md_5.bungee.event.EventHandler;
 import java.util.List;
 
 /**
- * CrafterConnect BungeeCord / Waterfall eklentisi (#371). Velocity modülüyle aynı davranır: proxy ayrı bir
- * CrafterConnect sunucusu olarak bağlanır, teslimat komutları proxy konsolunda çalışır, oyuncu giriş/çıkışı
- * proxy'den bir kez bildirilir.
+ * CrafterConnect BungeeCord / Waterfall plugin (#371). Behaves like the Velocity module: the proxy connects as a
+ * separate CrafterConnect server, delivery commands run on the proxy console, and player joins/leaves are
+ * reported once from the proxy.
  */
 public class CrafterBungeePlugin extends Plugin implements Listener {
 

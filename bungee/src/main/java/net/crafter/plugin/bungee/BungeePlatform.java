@@ -23,8 +23,8 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 /**
- * BungeeCord / Waterfall bağlantı noktaları. Velocity ile aynı davranır: komutlar proxy konsolunda, geliş sırasıyla
- * tek bir thread'de çalışır.
+ * BungeeCord / Waterfall bindings. Behaves like Velocity: commands run on the proxy console, in arrival order,
+ * on a single thread.
  */
 public class BungeePlatform implements Platform {
 
@@ -68,7 +68,7 @@ public class BungeePlatform implements Platform {
         if (playerName == null || playerName.isBlank()) return false;
         String name = playerName.trim();
         if (proxy().getPlayer(name) != null) return true;
-        // BungeeCord getPlayer(String) büyük/küçük harfe duyarlı olabilir
+        // BungeeCord getPlayer(String) may be case-sensitive
         for (ProxiedPlayer p : proxy().getPlayers()) {
             if (p.getName().equalsIgnoreCase(name)) return true;
         }

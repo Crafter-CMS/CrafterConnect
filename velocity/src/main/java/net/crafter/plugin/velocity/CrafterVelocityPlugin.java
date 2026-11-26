@@ -17,9 +17,9 @@ import org.slf4j.Logger;
 import java.nio.file.Path;
 
 /**
- * CrafterConnect Velocity eklentisi. Proxy ayrı bir CrafterConnect sunucusu olarak bağlanır; teslimat komutları
- * proxy konsolunda çalışır. player_join/player_left proxy'den bir kez gönderilir (arka sunucularda
- * {@code report-players: false}).
+ * CrafterConnect Velocity plugin. The proxy connects as a separate CrafterConnect server; delivery commands
+ * run on the proxy console. player_join/player_left are sent once from the proxy (with
+ * {@code report-players: false} on backend servers).
  */
 @Plugin(
         id = "crafter-connect",

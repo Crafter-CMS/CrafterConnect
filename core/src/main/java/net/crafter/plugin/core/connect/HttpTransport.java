@@ -8,14 +8,14 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 
-/** HTTP isteği (testlerde sahte uygulama kullanılır; gerçek ağa çıkılmaz) */
+/** HTTP request (tests use a fake implementation; no real network access) */
 public interface HttpTransport {
 
     record Response(int status, String body) {}
 
     Response send(String method, URI uri, Map<String, String> headers, String jsonBody) throws IOException;
 
-    /** java.net.http ile varsayılan uygulama */
+    /** Default implementation using java.net.http */
     static HttpTransport standard(String userAgent) {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))

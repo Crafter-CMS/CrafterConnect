@@ -28,8 +28,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * CrafterConnect Paper/Spigot eklentisi (Folia uyumlu). Bağlantı, kuyruk ve güvenlik çekirdekte
- * ({@link CrafterConnectService}); burada olaylar, komutlar ve oyun içi menüler var.
+ * CrafterConnect Paper/Spigot plugin (Folia compatible). Connection, queue and security live in the core
+ * ({@link CrafterConnectService}); events, commands and in-game menus live here.
  */
 public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
 
@@ -78,14 +78,14 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         if (service == null) return;
-        // Sunucu kapanırken oyuncular eklentiler kapandıktan sonra atılır: son değerler burada kuyruğa yazılır
+        // On shutdown players are kicked after plugins are disabled, so the final values are queued here
         if (!scheduler.isFolia()) {
             List<PlayerSnapshot> last = new ArrayList<>();
             for (Player p : Bukkit.getOnlinePlayers()) {
                 try {
                     last.add(SpigotPlatform.snapshot(p));
                 } catch (RuntimeException ignored) {
-                    // okunamayan oyuncu atlanır; son 5 dk'lık örnek zaten kuyrukta
+                    // a player that cannot be read is skipped; the sample from the last 5 minutes is already queued
                 }
             }
             service.recordShutdown(last);
@@ -110,7 +110,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         service.onPlayerQuit(event.getPlayer().getName(), event.getPlayer().getUniqueId());
     }
 
-    /** Olay oyuncunun thread'inde: istatistik burada okunur, gönderim io thread'inde (#529) */
+    /** Runs on the player's thread: stats are read here, sending happens on the io thread (#529) */
     private void recordStats(Player player, String reason) {
         try {
             service.recordPlayerStats(SpigotPlatform.snapshot(player), reason);
@@ -194,7 +194,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         pendingShopPlayers.clear();
     }
 
-    // --- Menüler ve PlaceholderAPI için ---
+    // --- For menus and PlaceholderAPI ---
 
     public CrafterConnectService getService() { return service; }
     SpigotAfk afk() { return afk; }

@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-/** Paper/Spigot (ve Folia) bağlantı noktaları */
+/** Paper/Spigot (and Folia) bindings */
 public class SpigotPlatform implements Platform {
 
     private final CrafterSpigotPlugin plugin;
@@ -59,7 +59,7 @@ public class SpigotPlatform implements Platform {
     @Override
     public boolean isPlayerOnline(String playerName) {
         if (playerName == null || playerName.isBlank()) return false;
-        // getPlayerExact büyük/küçük harf duyarsızdır
+        // getPlayerExact is case-insensitive
         Player p = Bukkit.getPlayerExact(playerName.trim());
         return p != null && p.isOnline();
     }
@@ -90,12 +90,12 @@ public class SpigotPlatform implements Platform {
 
     @Override
     public String platformId() {
-        // Katalogda Folia ayrı platform değildir; Paper ve türevleri "paper"
+        // Folia is not a separate platform in the catalog; Paper and its forks are "paper"
         try {
             Class.forName("com.destroystokyo.paper.PaperConfig");
             return "paper";
         } catch (ClassNotFoundException ignored) {
-            // eski Paper sınıfı yoksa yenisini dene
+            // if the old Paper class is missing, try the new one
         }
         try {
             Class.forName("io.papermc.paper.configuration.Configuration");
@@ -155,7 +155,7 @@ public class SpigotPlatform implements Platform {
     @Override
     public Map<String, String> loadMessages(String language) throws IOException {
         Map<String, String> messages = new HashMap<>();
-        // Paketteki varsayılanlar: yeni sürümde eklenen anahtarlar eski dil dosyasında yoksa buradan gelir
+        // Bundled defaults: keys added in a newer version that are missing from an old language file come from here
         String resource = "lang/" + language + ".yml";
         InputStream bundled = plugin.getResource(resource);
         if (bundled == null) {
@@ -195,16 +195,16 @@ public class SpigotPlatform implements Platform {
         return log;
     }
 
-    // --- Oynama süresi (#529) ---
+    // --- Playtime (#529) ---
 
     @Override
     public boolean supportsPlayerStats() {
         return true;
     }
 
-    /** Oyuncunun thread'inde çağrılmalı (Paper/Spigot: ana thread; Folia: oyuncunun bölgesi) */
+    /** Must be called on the player's thread (Paper/Spigot: main thread; Folia: the player's region) */
     static PlayerSnapshot snapshot(Player player) {
-        long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE); // adı yanıltıcı: tick sayar
+        long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE); // misleading name: it counts ticks
         return new PlayerSnapshot(player.getUniqueId(), player.getName(), PlayerSnapshot.ticksToSeconds(ticks));
     }
 
@@ -229,7 +229,7 @@ public class SpigotPlatform implements Platform {
             });
             return;
         }
-        // Folia: her oyuncu kendi bölgesinde okunur; hepsi (ya da çıkanlar) bitince toplu teslim
+        // Folia: each player is read in their own region; delivered as a batch once all (or the leavers) are done
         SnapshotBatch batch = new SnapshotBatch(players.size(), done);
         for (Player p : players) {
             try {
@@ -260,7 +260,7 @@ public class SpigotPlatform implements Platform {
         return plugin.afk().select(mode, idleThresholdMs);
     }
 
-    /** LanguageManager kısayolu */
+    /** LanguageManager shortcut */
     LanguageManager lang() {
         return plugin.getLanguageManager();
     }

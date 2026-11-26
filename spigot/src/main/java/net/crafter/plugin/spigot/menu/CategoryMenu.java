@@ -35,7 +35,7 @@ public class CategoryMenu extends MenuManager.BaseMenu {
     private ItemStack createCategoryItem(Category category) {
         Material material;
         try {
-            // Icon bilgisini Material'a çeviriyoruz (Örn: BOOK, DIAMOND)
+            // Convert the icon value to a Material (e.g. BOOK, DIAMOND)
             material = Material.valueOf(category.getIcon().toUpperCase());
         } catch (Exception e) {
             material = Material.BOOK;
@@ -61,7 +61,7 @@ public class CategoryMenu extends MenuManager.BaseMenu {
 
         Player player = (Player) event.getWhoClicked();
         
-        // Tıklanan kategori isminden kategoriyi buluyoruz
+        // Find the category by the clicked category name
         for (Category category : categories) {
             if (clicked.getItemMeta().getDisplayName().contains(category.getName())) {
                 player.openInventory(new ShopMenu(plugin, category.getId()).getInventory());

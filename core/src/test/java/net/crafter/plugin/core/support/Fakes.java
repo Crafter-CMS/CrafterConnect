@@ -11,7 +11,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-/** Testlerde sahte platform, HTTP ve log (gerçek sunucu ya da ağ yok) */
+/** Fake platform, HTTP and log for tests (no real server or network) */
 public final class Fakes {
     private Fakes() {}
 
@@ -48,13 +48,13 @@ public final class Fakes {
         };
     }
 
-    /** Çevrimiçi oyuncu listesi ve çalıştırılan komutları tutan platform */
+    /** Platform that keeps the online player list and the commands that ran */
     public static class FakePlatform implements Platform {
         public final Set<String> online = Collections.synchronizedSet(new HashSet<>());
         public final Set<UUID> onlineUuids = Collections.synchronizedSet(new HashSet<>());
         public final List<String> executed = Collections.synchronizedList(new ArrayList<>());
         public final List<Runnable> deferred = Collections.synchronizedList(new ArrayList<>());
-        /** true: komutlar hemen değil runDeferred() ile çalışır (ana thread benzetimi) */
+        /** true: commands run via runDeferred() instead of immediately (simulates the main thread) */
         public volatile boolean defer = false;
         public volatile boolean result = true;
         public final CapturingLog log = new CapturingLog();
@@ -86,7 +86,7 @@ public final class Fakes {
             Path cfg = configFile();
             Map<String, Object> values = new HashMap<>(configValues);
             if (java.nio.file.Files.exists(cfg)) {
-                // Basit "anahtar: "değer"" okuyucu (yalnızca üst düzey dizeler)
+                // Simple "key: "value"" reader (top-level strings only)
                 for (String line : java.nio.file.Files.readAllLines(cfg)) {
                     var m = java.util.regex.Pattern.compile("^([a-z-]+):\\s*\"(.*)\"\\s*$").matcher(line);
                     if (m.matches()) values.put(m.group(1), m.group(2));
@@ -100,7 +100,7 @@ public final class Fakes {
         @Override public CrafterLog log() { return log; }
     }
 
-    /** Paketteki tr.yml'dan basit okuma (testte YAML kütüphanesi yok) */
+    /** Simple read from the bundled tr.yml (no YAML library in tests) */
     public static Map<String, String> messages() {
         Map<String, String> out = new HashMap<>();
         try (var in = Fakes.class.getResourceAsStream("/lang/en.yml")) {

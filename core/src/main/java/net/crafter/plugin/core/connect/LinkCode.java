@@ -3,8 +3,8 @@ package net.crafter.plugin.core.connect;
 import java.util.Locale;
 
 /**
- * Paneldeki bağlantı kodu (#369 3.2): 8 karakter Crockford base32 (I L O U yok), "K7QM-4XPD" biçiminde gösterilir.
- * Karşılaştırma büyük/küçük harf, tire ve boşluk duyarsızdır; O → 0, I/L → 1 okunur (backend ile aynı kural).
+ * Link code from the panel (#369 3.2): 8 Crockford base32 characters (no I L O U), shown as "K7QM-4XPD".
+ * Comparison ignores case, dashes and spaces; O is read as 0, I/L as 1 (same rule as the backend).
  */
 public final class LinkCode {
 
@@ -13,7 +13,7 @@ public final class LinkCode {
 
     private LinkCode() {}
 
-    /** Geçersizse null */
+    /** Null if invalid */
     public static String normalize(String raw) {
         if (raw == null) return null;
         String cleaned = raw.toUpperCase(Locale.ROOT)

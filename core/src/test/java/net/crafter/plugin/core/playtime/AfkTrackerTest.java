@@ -18,7 +18,7 @@ class AfkTrackerTest {
     void countsOnlyWhileAfkFromSecondPoll() {
         AfkTracker t = new AfkTracker(30_000);
         AfkSource afkA = (uuid, now) -> uuid.equals(A);
-        t.poll(List.of(A, B), afkA, 0);          // başlangıç
+        t.poll(List.of(A, B), afkA, 0);          // baseline
         t.poll(List.of(A, B), afkA, 30_000);
         t.poll(List.of(A, B), afkA, 60_000);
         assertEquals(60, t.totalSeconds(A));
@@ -30,10 +30,10 @@ class AfkTrackerTest {
         AfkTracker t = new AfkTracker(30_000);
         AfkSource always = (uuid, now) -> true;
         t.poll(List.of(A), always, 0);
-        t.poll(List.of(A), always, 10 * 60_000); // sunucu dondu: en çok 2 × 30 sn
+        t.poll(List.of(A), always, 10 * 60_000); // server froze: at most 2 × 30 s
         assertEquals(60, t.totalSeconds(A));
         t.onQuit(A);
-        t.poll(List.of(A), always, 20 * 60_000); // yeniden giriş: başlangıç, süre eklenmez
+        t.poll(List.of(A), always, 20 * 60_000); // rejoin: baseline, no time added
         assertEquals(60, t.totalSeconds(A));
         t.poll(List.of(A), always, 20 * 60_000 + 30_000);
         assertEquals(90, t.totalSeconds(A));
@@ -60,7 +60,7 @@ class AfkTrackerTest {
         assertEquals(30, reloaded.totalSeconds(A));
 
         AfkTracker pruned = new AfkTracker(30_000);
-        pruned.load(saved, 40_000); // 40 sn'den önce görülenler eski
+        pruned.load(saved, 40_000); // players seen before 40 s are stale
         assertEquals(0, pruned.totalSeconds(A));
     }
 
@@ -81,7 +81,7 @@ class AfkTrackerTest {
         AfkTracker t = new AfkTracker(30_000);
         idle.markActive(A, 0);
         for (long now = 0; now <= 180_000; now += 30_000) t.poll(List.of(A), idle, now);
-        // 60 sn'de eşik aşıldı; 90, 120, 150, 180 yoklamaları (60 sn'deki dahil) AFK
+        // threshold exceeded at 60 s; the 90, 120, 150, 180 polls (including the one at 60 s) are AFK
         assertEquals(150, t.totalSeconds(A));
     }
 }

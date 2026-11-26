@@ -1,6 +1,6 @@
 package net.crafter.plugin.core;
 
-/** GitHub Releases'taki en son sürüm ile karşılaştırma sonucu (yalnızca bilgi; eklentiyi kapatmaz) */
+/** Result of comparing with the latest version on GitHub Releases (informational only; never disables the plugin) */
 public final class UpdateCheckResult {
     private final boolean hasUpdate;
     private final String currentVersion;

@@ -32,7 +32,7 @@ class CrafterConnectServiceTest {
     void setUp() throws Exception {
         platform = new Fakes.FakePlatform();
         platform.dir = dir;
-        // Gerçek sunucuya bağlanılmaması için kapalı yerel port
+        // Closed local port so no real server is contacted
         Files.writeString(dir.resolve("config.yml"), "# CrafterConnect\napi-url: \"http://127.0.0.1:9\"\nlanguage: \"en\"\n");
         platform.configValues.put("max-reconnect-attempts", "1");
         http = new Fakes.FakeHttp();
@@ -47,7 +47,7 @@ class CrafterConnectServiceTest {
 
     private List<String> connect(String code) throws InterruptedException {
         List<String> replies = Collections.synchronizedList(new ArrayList<>());
-        CountDownLatch done = new CountDownLatch(2); // "kontrol ediliyor" + sonuç
+        CountDownLatch done = new CountDownLatch(2); // "checking" + result
         service.connect(code, m -> { replies.add(m); done.countDown(); });
         assertTrue(done.await(10, TimeUnit.SECONDS));
         return replies;
@@ -79,7 +79,7 @@ class CrafterConnectServiceTest {
         assertTrue(service.statusLines().stream().anyMatch(l -> l.contains("Demo")));
         assertFalse(String.join("\n", service.statusLines()).contains(TOKEN));
 
-        // /crafter disconnect token'ı siler
+        // /crafter disconnect removes the token
         List<String> out = new ArrayList<>();
         service.disconnect(out::add);
         assertTrue(Files.readString(dir.resolve("config.yml")).contains("server-token: \"\""));

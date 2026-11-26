@@ -15,6 +15,6 @@ public class ChestItem {
     }
 
     public String getStatus() {
-        return used ? "Kullanıldı" : "Bekliyor";
+        return used ? "Used" : "Pending";
     }
 }

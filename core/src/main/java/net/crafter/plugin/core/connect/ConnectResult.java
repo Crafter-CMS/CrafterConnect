@@ -1,6 +1,6 @@
 package net.crafter.plugin.core.connect;
 
-/** POST /plugin/v2/connect yanıtı. {@link #toString()} token'ı yazmaz. */
+/** POST /plugin/v2/connect response. {@link #toString()} does not print the token. */
 public final class ConnectResult {
     private final String websiteId;
     private final String serverId;

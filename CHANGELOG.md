@@ -1,29 +1,6 @@
-# Değişiklikler / Changelog
+# Changelog
 
 ## 2.0.0
-
-### Türkçe
-
-- **Bağlantı kodu ile kurulum:** `/crafter connect <kod>`. Website ID, secret ya da server ID kopyalanmaz. Sunucuya
-  özel token (`cct_…`) `config.yml` dosyasına yalnızca sunucu kullanıcısının okuyabileceği izinle yazılır; loglanmaz.
-- Yeni komutlar: `/crafter connect`, `/crafter disconnect`; `/crafter status` mağaza, sunucu ID, sürüm ve bekleyen
-  komutları gösterir.
-- **BungeeCord / Waterfall** desteği (yeni modül). Paper/Spigot için **Folia** uyumu.
-- **Bedrock (Geyser/Floodgate):** Floodgate öneki okunur ve Crafter'a bildirilir; önekli ve boşluklu Bedrock adları
-  teslim edilir.
-- **Kalıcı kuyruk:** çevrimdışı oyuncu komutları, çalıştırılan komut id'leri ve gönderilemeyen onaylar
-  `data/commands.json` dosyasında saklanır. Aynı komut iki kez çalışmaz.
-- Komutlar ana thread'i bekletmeden sırayla çalışır; yeniden bağlanma üstel bekleme ile yapılır.
-- Komut koruması: izinli komut önekleri (yerel + panel), kontrol karakteri ve oyuncu adı kontrolü.
-- Sunucu her 30 saniyede durumunu (çevrimiçi oyuncu) bildirir.
-- 1.x'teki "yeni sürümden 7 gün sonra eklentiyi kapatma" kaldırıldı; asgari sürümün altındaysa konsolda uyarı gösterilir.
-- Eski kurulumlar (`website-id`, `plugin-secret`, `server-id`) güncellemeden sonra çalışmaya devam eder.
-- **Oynama süresi (Paper/Spigot):** süre oyunun kendi istatistiğinden (`PLAY_ONE_MINUTE`) 5 dakikada bir, girişte
-  ve çıkışta gönderilir; AFK süresi ayrı sayılır (Essentials, CMI ya da hareketsizlik eşiği). Bağlantı yokken
-  `data/playtime.json` dosyasında bekler; çökmede süre kaybolmaz ya da şişmez. Velocity/BungeeCord süre göndermez.
-  Ayarlar: `playtime.*`.
-
-### English
 
 - **Setup with a connection code:** `/crafter connect <code>`. No website ID, secret or server ID to copy. The
   per-server token (`cct_…`) is written to `config.yml` with owner-only permissions and is never logged.

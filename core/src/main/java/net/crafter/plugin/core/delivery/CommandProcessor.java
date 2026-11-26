@@ -10,22 +10,22 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * Teslimat kuralları (#37 bölüm 3.4), taşımadan bağımsız:
+ * Delivery rules (#37 section 3.4), transport-independent:
  * <ol>
- *   <li>Aynı commandId ikinci kez gelirse çalıştırılmaz; önceki sonuç (executed/queued) yeniden bildirilir.</li>
- *   <li>Güvenlik kontrolünden geçmeyen komut çalıştırılmaz, NACK gönderilir.</li>
- *   <li>Oyuncu çevrimdışıysa komut kalıcı kuyruğa alınır ve {@code ack{status:"queued"}} gönderilir. Oyuncu girince
- *   çalıştırılır ve {@code ack{status:"executed"}} gönderilir.</li>
- *   <li>Komut ana thread'de çalışır; sonuç ACK ya da NACK olarak giden kutusuna yazılır ve bağlantı varsa hemen
- *   gönderilir.</li>
+ *   <li>If the same commandId arrives twice it is not run; the previous result (executed/queued) is reported again.</li>
+ *   <li>A command that fails the security check is not run and a NACK is sent.</li>
+ *   <li>If the player is offline the command goes to the persistent queue and {@code ack{status:"queued"}} is sent. When the player
+ *   joins it runs and {@code ack{status:"executed"}} is sent.</li>
+ *   <li>The command runs on the main thread; the result is written to the outbox as an ACK or NACK and sent right away
+ *   if connected.</li>
  * </ol>
- * Komut metni ve oyuncu adı loglanmaz; yalnızca commandId yazılır.
+ * The command text and player name are never logged; only the commandId is written.
  */
 public final class CommandProcessor {
 
     public static final String REASON_EXECUTION_FAILED = "execution_failed";
 
-    /** ACK/NACK'i bağlantıya yazar; bağlantı yoksa false */
+    /** Writes the ACK/NACK to the connection; false if not connected */
     public interface Sender {
         boolean send(CommandStore.Outgoing outgoing);
     }
@@ -51,16 +51,16 @@ public final class CommandProcessor {
         return store;
     }
 
-    /** Backend'den gelen komut */
+    /** Command received from the backend */
     public void onCommand(PendingCommand pc) {
         if (pc == null || pc.getCommand() == null) return;
         String id = pc.getCommandId();
 
         if (id != null) {
-            // Backend ACK alamayınca aynı id ile yeniden gönderir
-            if (store.isRunning(id)) return; // sonuç birazdan gönderilecek
+            // The backend resends with the same id when it gets no ACK
+            if (store.isRunning(id)) return; // the result will be sent shortly
             if (store.isProcessed(id)) {
-                // Önceki sonuç aynen yinelenir: reddedilen komut yine NACK alır
+                // The previous result is repeated as is: a rejected command gets a NACK again
                 reply(store.resultOf(id));
                 return;
             }
@@ -74,7 +74,7 @@ public final class CommandProcessor {
         if (reason != null) {
             log.warn("[CrafterConnect] Command " + id + " rejected (" + reason + ")");
             if (id != null) {
-                // Reddedilen id de işlenmiş sayılır: aynı komut tekrar gelirse yine çalıştırılmaz
+                // A rejected id also counts as processed: if the same command arrives again it still does not run
                 if (store.beginRun(id)) store.finishRun(id, CommandStore.Outgoing.nack(id, reason));
                 flush();
             }
@@ -83,8 +83,8 @@ public final class CommandProcessor {
 
         if (pc.hasPlayer() && pc.getPlayer().contains(" ")
                 && !executor.isPlayerOnline(pc.getPlayer()) && executor.isPlayerOnline(pc.getPlayer().replace(' ', '_'))) {
-            // Floodgate oyun içi adda boşlukları "_" yapar; %player% oyundaki adla doldurulur (Bukkit tırnakları
-            // yorumlamaz, boşluklu ad komuta iki argüman olarak gider)
+            // Floodgate turns spaces in the in-game name into "_"; %player% is filled with the in-game name (Bukkit does not
+            // interpret quotes, so a spaced name would reach the command as two arguments)
             pc.setPlayer(pc.getPlayer().trim().replace(' ', '_'));
         }
 
@@ -98,11 +98,11 @@ public final class CommandProcessor {
         run(pc);
     }
 
-    /** Oyuncu girdi: kuyruktaki komutları sırayla çalıştırır */
+    /** Player joined: runs the queued commands in order */
     public void onPlayerJoin(String playerName, UUID uuid) {
         List<PendingCommand> due = store.drainFor(playerName, uuid == null ? null : uuid.toString());
         for (PendingCommand pc : due) {
-            // %player% oyuncunun oyundaki adıyla doldurulur (ad değişikliği, Floodgate "_")
+            // %player% is filled with the player's in-game name (name changes, Floodgate "_")
             if (pc.hasPlayer() && playerName != null && !playerName.isBlank()) pc.setPlayer(playerName);
             String reason = guard.get().check(pc);
             if (reason != null) {
@@ -148,23 +148,23 @@ public final class CommandProcessor {
             try {
                 if (executor.isPlayerOnline(parseUuid(uuid))) return true;
             } catch (IllegalArgumentException ignored) {
-                // biçim CommandGuard'da kontrol edildi
+                // format already checked in CommandGuard
             }
         }
         String name = pc.getPlayer();
         if (executor.isPlayerOnline(name)) return true;
-        // Floodgate varsayılan olarak Bedrock adındaki boşlukları "_" yapar
+        // By default Floodgate turns spaces in the Bedrock name into "_"
         return name != null && name.contains(" ") && executor.isPlayerOnline(name.replace(' ', '_'));
     }
 
     private void reply(CommandStore.Outgoing outgoing) {
         if (outgoing.commandId == null) return;
-        // Bağlantı yoksa giden kutusuna yazılır ve bağlanınca gönderilir
+        // Without a connection it goes to the outbox and is sent once connected
         Sender s = sender;
         if (s == null || !s.send(outgoing)) store.addOutgoing(outgoing);
     }
 
-    /** Giden kutusundaki ACK/NACK'leri gönderir (bağlantı kurulunca ve her sonuçtan sonra) */
+    /** Sends the ACK/NACKs in the outbox (once connected and after every result) */
     public synchronized void flush() {
         Sender s = sender;
         if (s == null) return;

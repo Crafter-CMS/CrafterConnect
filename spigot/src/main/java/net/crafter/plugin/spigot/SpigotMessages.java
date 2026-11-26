@@ -7,7 +7,7 @@ import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.entity.Player;
 
-/** Satın alma yanıtı mesajı (oyuncunun thread'inde çağrılır) */
+/** Purchase response message (called on the player's thread) */
 final class SpigotMessages {
     private SpigotMessages() {}
 

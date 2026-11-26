@@ -3,9 +3,9 @@ package net.crafter.plugin.core.playtime;
 import java.util.UUID;
 
 /**
- * Oyuncunun oyun içi istatistiği (#529): {@code Statistic.PLAY_ONE_MINUTE} tick'ten saniyeye çevrilmiş MUTLAK değer.
- * Oyun bu değeri oyuncu dosyasında tutar; çökme ya da yeniden başlatmada kaybolmaz (en çok son kayıttan beri olan
- * tick'ler geri gider).
+ * Player's in-game statistic (#529): {@code Statistic.PLAY_ONE_MINUTE} converted from ticks to seconds, ABSOLUTE value.
+ * The game keeps this value in the player file; it survives a crash or restart (at most the ticks since the last save
+ * are lost).
  */
 public record PlayerSnapshot(UUID uuid, String username, long playSeconds) {
 

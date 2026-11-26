@@ -39,7 +39,7 @@ public class ShopMenu extends MenuManager.BaseMenu {
         
         placeCentered(items);
 
-        // Geri dön butonu
+        // Back button
         ItemStack back = new ItemStack(Material.ARROW);
         ItemMeta meta = back.getItemMeta();
         if (meta != null) {
@@ -82,7 +82,7 @@ public class ShopMenu extends MenuManager.BaseMenu {
 
         if (clicked.getType().name().contains("GLASS_PANE")) return;
 
-        // Ürünü bul ve satın alma isteği gönder
+        // Find the product and send a purchase request
         for (Product product : filteredProducts) {
             if (clicked.getItemMeta().getDisplayName().contains(product.getName())) {
                 player.sendMessage(plugin.getLanguageManager().getMessage("prefix") + 

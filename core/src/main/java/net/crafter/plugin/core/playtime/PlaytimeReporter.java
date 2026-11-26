@@ -8,15 +8,15 @@ import java.util.*;
 import java.util.function.LongSupplier;
 
 /**
- * Oynama süresi ve AFK bildirimi (#529), zamanlayıcıdan bağımsız çekirdek.
+ * Playtime and AFK reporting (#529), scheduler-independent core.
  *
  * <ul>
- *   <li>{@link #record}: çevrimiçi oyuncuların {@code PLAY_ONE_MINUTE} değerleri (5 dk'da bir, girişte ve çıkışta)
- *   AFK toplamıyla örneğe çevrilir ve kalıcı kuyruğa yazılır.</li>
- *   <li>{@link #pollAfk}: kısa aralıkla AFK durumunu yoklar.</li>
- *   <li>{@link #flush}: bekleyen örnekler {@code player_stats} olarak gönderilir; ACK gelene kadar kuyrukta kalır.
- *   Bu bağlantıda henüz ACK görülmediyse yalnızca bir paket (yoklama) gider; 2 dk içinde ACK gelmezse backend
- *   player_stats'ı tanımıyor sayılır ve yeniden bağlanana kadar gönderilmez.</li>
+ *   <li>{@link #record}: online players' {@code PLAY_ONE_MINUTE} values (every 5 minutes, on join and on quit)
+ *   are turned into samples with the AFK total and written to the persistent queue.</li>
+ *   <li>{@link #pollAfk}: polls AFK state at a short interval.</li>
+ *   <li>{@link #flush}: pending samples are sent as {@code player_stats}; they stay queued until ACKed.
+ *   If no ACK has been seen on this connection yet, only one packet (a probe) is sent; if no ACK arrives within 2 minutes
+ *   the backend is assumed not to support player_stats and nothing is sent until reconnecting.</li>
  * </ul>
  */
 public final class PlaytimeReporter {
@@ -24,10 +24,10 @@ public final class PlaytimeReporter {
     public static final int BATCH_SIZE = 200;
     static final long RESEND_AFTER_MS = 60_000;
     static final long PROBE_TIMEOUT_MS = 120_000;
-    /** 180 gün görülmeyen oyuncunun AFK toplamı silinir (backend negatif farkı baz alır) */
+    /** The AFK total of a player not seen for 180 days is removed (the backend works from the negative delta) */
     static final long AFK_RETENTION_MS = 180L * 24 * 60 * 60 * 1000;
 
-    /** Mesajı sokete yazar; yazılamadıysa false */
+    /** Writes the message to the socket; false if it could not be written */
     @FunctionalInterface
     public interface Sender {
         boolean send(JsonObject data);
@@ -59,7 +59,7 @@ public final class PlaytimeReporter {
         afk.poll(online, source, clock.getAsLong());
     }
 
-    /** Oyuncu istatistiklerini kuyruğa yazar. reason: interval | join | quit */
+    /** Writes player stats to the queue. reason: interval | join | quit */
     public void record(Collection<PlayerSnapshot> snapshots, String reason) {
         if (snapshots == null || snapshots.isEmpty()) return;
         long now = clock.getAsLong();
@@ -75,7 +75,7 @@ public final class PlaytimeReporter {
         store.add(samples);
     }
 
-    /** Yeni bağlantı: ACK durumu sıfırlanır, bekleyenler yeniden denenebilir */
+    /** New connection: ACK state is reset, pending samples may be retried */
     public synchronized void onConnected() {
         ackSeen = false;
         probeSentAt = 0;
@@ -83,7 +83,7 @@ public final class PlaytimeReporter {
         for (StatSample s : store.pending()) s.sentAt = 0;
     }
 
-    /** @return gönderilen örnek sayısı */
+    /** @return number of samples sent */
     public synchronized int flush(Sender sender) {
         if (sender == null) return 0;
         long now = clock.getAsLong();
@@ -111,7 +111,7 @@ public final class PlaytimeReporter {
         return sent;
     }
 
-    /** {@code player_stats_ack}: ACK'lenen örnekler silinir; bekleyen varsa {@code sender} ile devam edilir */
+    /** {@code player_stats_ack}: ACKed samples are removed; continues with {@code sender} if any are pending */
     public void onAck(Collection<String> keys, Sender sender) {
         synchronized (this) {
             ackSeen = true;

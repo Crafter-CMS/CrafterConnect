@@ -7,8 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
- * Folia'da her oyuncunun istatistiği kendi bölgesinde okunur; bu sınıf hepsi gelince (ya da çıkan oyuncular
- * {@link #skip()} edilince) listeyi bir kez teslim eder. Thread güvenlidir.
+ * On Folia each player's stats are read in their own region; this class delivers the list once when all have arrived (or
+ * players who left are {@link #skip()}ped). Thread-safe.
  */
 public final class SnapshotBatch {
 
@@ -32,7 +32,7 @@ public final class SnapshotBatch {
         countDown();
     }
 
-    /** Oyuncu çıktı ya da okunamadı */
+    /** Player left or could not be read */
     public void skip() {
         countDown();
     }

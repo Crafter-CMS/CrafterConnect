@@ -1,8 +1,8 @@
 package net.crafter.plugin.core.connect;
 
 /**
- * Bağlanma hatası. {@link #code()} backend hata tipidir (link_code_invalid, link_code_expired, plan_limit_reached,
- * server_not_found, game_not_supported, plugin_protocol_unsupported) ya da yerel bir kod (invalid_code_format,
+ * Connection error. {@link #code()} is the backend error type (link_code_invalid, link_code_expired, plan_limit_reached,
+ * server_not_found, game_not_supported, plugin_protocol_unsupported) or a local code (invalid_code_format,
  * rate_limited, network_error, invalid_response, server_error).
  */
 public class ConnectException extends Exception {
@@ -17,6 +17,6 @@ public class ConnectException extends Exception {
 
     public String code() { return code; }
 
-    /** plugin_protocol_unsupported için asgari sürüm, diğerlerinde null */
+    /** Minimum version for plugin_protocol_unsupported, null otherwise */
     public String detail() { return detail; }
 }

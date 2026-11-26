@@ -18,7 +18,7 @@ class ConnectClientTest {
         assertEquals("K7QM4XPD", LinkCode.normalize(" K7QM 4XPD "));
         assertEquals("10QM4XPD", LinkCode.normalize("loQM-4XPD")); // l → 1, o → 0
         assertNull(LinkCode.normalize("K7QM-4XP"));
-        assertNull(LinkCode.normalize("K7QM-4XPU")); // U alfabede yok
+        assertNull(LinkCode.normalize("K7QM-4XPU")); // U is not in the alphabet
         assertNull(LinkCode.normalize("K7QM;4XPD"));
         assertEquals("K7QM-4XPD", LinkCode.format("K7QM4XPD"));
     }
@@ -27,7 +27,7 @@ class ConnectClientTest {
     void successfulConnectSendsContractAndParsesToken() throws Exception {
         Fakes.FakeHttp http = new Fakes.FakeHttp();
         http.responder = uri -> new HttpTransport.Response(200, "{\"websiteId\":\"w1\",\"serverId\":\"s1\",\"serverToken\":\"" + TOKEN
-                + "\",\"identityType\":\"minecraft_java\",\"wsUrl\":\"wss://x\",\"store\":{\"name\":\"Örnek Mağaza\"}}");
+                + "\",\"identityType\":\"minecraft_java\",\"wsUrl\":\"wss://x\",\"store\":{\"name\":\"Café Store\"}}");
         ConnectResult r = new ConnectClient("https://api.crafter.net.tr/", http).connect("k7qm 4xpd", info);
 
         assertEquals("POST", http.methods.get(0));
@@ -45,7 +45,7 @@ class ConnectClientTest {
 
         assertEquals("s1", r.serverId());
         assertEquals(TOKEN, r.serverToken());
-        assertEquals("Örnek Mağaza", r.storeName());
+        assertEquals("Café Store", r.storeName());
         assertFalse(r.toString().contains(TOKEN));
     }
 

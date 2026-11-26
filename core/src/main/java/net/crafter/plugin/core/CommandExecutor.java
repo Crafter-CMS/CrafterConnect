@@ -3,23 +3,23 @@ package net.crafter.plugin.core;
 import java.util.function.Consumer;
 
 /**
- * Platforma özgü komut çalıştırma ve oyuncu işlemleri.
+ * Platform-specific command execution and player operations.
  */
 public interface CommandExecutor {
 
     /**
-     * Komutu konsol göndericisiyle platformun ana thread'inde (Folia'da global bölge zamanlayıcısında, proxy'de
-     * sıralı bir yürütücüde) çalıştırır. Çağıran thread'i bekletmez; geliş sırası korunur.
+     * Runs the command as the console sender on the platform's main thread (on Folia the global region scheduler, on a
+     * proxy a sequential executor). Does not block the calling thread; arrival order is preserved.
      *
-     * @param command  baştaki "/" olmadan, doğrulanmış komut
-     * @param callback sonuç (true: komut çalıştı); herhangi bir thread'den çağrılabilir
+     * @param command  validated command, without the leading "/"
+     * @param callback result (true: the command ran); may be called from any thread
      */
     void dispatchConsole(String command, Consumer<Boolean> callback);
 
-    /** Oyuncu çevrimiçi mi (ad büyük/küçük harf duyarsız) */
+    /** Whether the player is online (name is case-insensitive) */
     boolean isPlayerOnline(String playerName);
 
-    /** Bu UUID'li oyuncu çevrimiçi mi */
+    /** Whether the player with this UUID is online */
     default boolean isPlayerOnline(java.util.UUID uuid) {
         return false;
     }
@@ -28,6 +28,6 @@ public interface CommandExecutor {
 
     void handlePurchaseResponse(String username, boolean success, String message);
 
-    /** Konsolda gösterilecek platform adı ve sürümü */
+    /** Platform name and version shown on the console */
     String getPlatformName();
 }

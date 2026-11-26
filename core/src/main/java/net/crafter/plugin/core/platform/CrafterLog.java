@@ -1,15 +1,15 @@
 package net.crafter.plugin.core.platform;
 
 /**
- * Platformdan bağımsız log arayüzü. Spigot ve BungeeCord'da java.util.logging, Velocity'de SLF4J kullanılır.
- * Token, bağlantı kodu ve gizli değerler hiçbir seviyede loglanmaz.
+ * Platform-independent logging interface. Spigot and BungeeCord use java.util.logging, Velocity uses SLF4J.
+ * Tokens, link codes and secret values are never logged at any level.
  */
 public interface CrafterLog {
     void info(String message);
     void warn(String message);
     void error(String message);
 
-    /** debug-mode açıksa yazılır */
+    /** Written only when debug-mode is on */
     default void debug(String message) {}
 
     static CrafterLog ofJul(java.util.logging.Logger logger, java.util.function.BooleanSupplier debug) {
@@ -21,7 +21,7 @@ public interface CrafterLog {
         };
     }
 
-    /** Hiçbir şey yazmaz (testler) */
+    /** Writes nothing (tests) */
     static CrafterLog silent() {
         return new CrafterLog() {
             @Override public void info(String m) {}

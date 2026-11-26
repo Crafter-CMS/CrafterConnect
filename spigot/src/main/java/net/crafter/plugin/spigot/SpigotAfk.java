@@ -15,9 +15,9 @@ import org.bukkit.plugin.Plugin;
 import java.lang.reflect.Method;
 
 /**
- * AFK kaynağı (#529). {@code auto}: Essentials, yoksa CMI, yoksa hareketsizlik eşiği. Essentials ve CMI derleme
- * bağımlılığı olmadan yansıma ile okunur (yalnızca okuma; AFK durumu değiştirilmez). Hareketsizlik için
- * hareket/bakış, sohbet, komut ve etkileşim olayları dinlenir.
+ * AFK source (#529). {@code auto}: Essentials, otherwise CMI, otherwise the idle threshold. Essentials and CMI are
+ * read via reflection without a compile dependency (read-only; AFK state is never changed). For idle detection
+ * move/look, chat, command and interaction events are tracked.
  */
 public final class SpigotAfk implements Listener {
 
@@ -112,7 +112,7 @@ public final class SpigotAfk implements Listener {
         Location from = event.getFrom();
         Location to = event.getTo();
         if (to == null) return;
-        // Yalnızca gerçek hareket ya da bakış değişimi (su akıntısı/itilme de hareket sayılır; bakış daha güvenilir)
+        // Only real movement or a look change (water flow/being pushed also counts as movement; look is more reliable)
         if (from.getYaw() != to.getYaw() || from.getPitch() != to.getPitch()
                 || from.getBlockX() != to.getBlockX() || from.getBlockZ() != to.getBlockZ()) {
             active(event.getPlayer());

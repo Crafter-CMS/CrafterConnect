@@ -24,7 +24,7 @@ import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Protokol testi: 127.0.0.1 üzerinde sahte bir Crafter WebSocket sunucusu (gerçek backend yok).
+ * Protocol test: a fake Crafter WebSocket server on 127.0.0.1 (no real backend).
  */
 class CrafterWebSocketClientTest {
 
@@ -46,7 +46,7 @@ class CrafterWebSocketClientTest {
         assertNull(CrafterWebSocketClient.createHeaders(legacy).get("Authorization"));
     }
 
-    /** Sahte sunucu: bağlanınca auth_success ve bir komut yollar, gelen olayları kaydeder */
+    /** Fake server: sends auth_success and a command on connect, records incoming events */
     static final class FakeBackend extends WebSocketServer {
         final BlockingQueue<String> received = new LinkedBlockingQueue<>();
         volatile String authorization;
@@ -128,7 +128,7 @@ class CrafterWebSocketClientTest {
             assertEquals("1.21.4", hello.get("gameVersion").getAsString());
             assertEquals(100, hello.get("maxPlayers").getAsInt());
             assertEquals(".", hello.get("floodgatePrefix").getAsString());
-            // Sahte platform istatistik okumaz (proxy gibi): player_stats yeteneği bildirilmez (#529)
+            // The fake platform reads no stats (like a proxy): the player_stats capability is not announced (#529)
             assertEquals(0, hello.getAsJsonArray("capabilities").size());
 
             JsonObject ack1 = JsonParser.parseString(nextEvent(server.received, "ack")).getAsJsonObject().getAsJsonObject("data");

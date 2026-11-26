@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * config.yml'da tek bir üst düzey değeri satır bazında değiştirir; yorumlar ve diğer ayarlar korunur.
- * Bukkit/Configurate ile kaydetmek yorumları silebildiği için {@code /crafter connect} token'ı bu sınıfla yazar.
- * Dosya her yazımda 600 izniyle atomik olarak değiştirilir.
+ * Replaces a single top-level value in config.yml line by line; comments and other settings are kept.
+ * Saving with Bukkit/Configurate can drop comments, so {@code /crafter connect} writes the token with this class.
+ * The file is replaced atomically with 600 permissions on every write.
  */
 public final class ConfigFileEditor {
 
@@ -31,7 +31,7 @@ public final class ConfigFileEditor {
                     lines.set(i, newLine);
                     replaced = true;
                 } else {
-                    // Aynı anahtar iki kez yazılmışsa ikincisi eski değeri taşıyabilir: kaldır
+                    // If the same key was written twice, the second may carry the old value: remove it
                     lines.remove(i--);
                 }
             }
@@ -46,7 +46,7 @@ public final class ConfigFileEditor {
         SecureFiles.writeAtomically(file, String.join("\n", lines) + "\n");
     }
 
-    /** YAML çift tırnaklı değer; kontrol karakterleri atılır */
+    /** YAML double-quoted value; control characters are dropped */
     static String quote(String value) {
         String v = value == null ? "" : value.replaceAll("[\\p{Cntrl}]", "");
         return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";

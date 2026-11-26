@@ -15,11 +15,11 @@ commands:
 
 permissions:
   crafter.admin:
-    description: CrafterConnect yönetimi (connect, disconnect, status, reload)
+    description: CrafterConnect management (connect, disconnect, status, reload)
     default: op
   crafter.shop:
-    description: Oyun içi mağaza (/crafter magaza)
+    description: In-game store (/crafter magaza)
     default: op
   crafter.chest:
-    description: Sandık (/crafter sandik)
+    description: Chest (/crafter sandik)
     default: op
