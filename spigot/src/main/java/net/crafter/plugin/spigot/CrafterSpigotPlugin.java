@@ -6,6 +6,7 @@ import net.crafter.plugin.core.LanguageManager;
 import net.crafter.plugin.core.MarketManager;
 import net.crafter.plugin.core.PlayerManager;
 import net.crafter.plugin.core.StatisticsManager;
+import net.crafter.plugin.core.playtime.PlayerSnapshot;
 import net.crafter.plugin.spigot.menu.CategoryMenu;
 import net.crafter.plugin.spigot.menu.ChestMenu;
 import net.crafter.plugin.spigot.menu.MenuManager;
@@ -20,6 +21,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -35,12 +37,15 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     private AdminCommand adminCommand;
     private SpigotScheduler scheduler;
     private MenuManager menuManager;
+    private SpigotAfk afk;
     private final Set<String> pendingShopPlayers = Collections.synchronizedSet(new HashSet<>());
 
     @Override
     public void onEnable() {
         scheduler = new SpigotScheduler(this);
-        service = new CrafterConnectService(new SpigotPlatform(this, scheduler));
+        SpigotPlatform platform = new SpigotPlatform(this, scheduler);
+        afk = new SpigotAfk(platform.log());
+        service = new CrafterConnectService(platform);
         adminCommand = new AdminCommand(service);
         service.marketManager().setOnUpdate(this::onMarketUpdate);
         service.marketManager().setOnChestUpdate((username, items) -> {
@@ -57,6 +62,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
         service.start();
         getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(menuManager, this);
+        getServer().getPluginManager().registerEvents(afk, this);
 
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             if (new CrafterPlaceholderExpansion(this).register()) {
@@ -71,7 +77,20 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if (service != null) service.stop();
+        if (service == null) return;
+        // Sunucu kapanırken oyuncular eklentiler kapandıktan sonra atılır: son değerler burada kuyruğa yazılır
+        if (!scheduler.isFolia()) {
+            List<PlayerSnapshot> last = new ArrayList<>();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                try {
+                    last.add(SpigotPlatform.snapshot(p));
+                } catch (RuntimeException ignored) {
+                    // okunamayan oyuncu atlanır; son 5 dk'lık örnek zaten kuyrukta
+                }
+            }
+            service.recordShutdown(last);
+        }
+        service.stop();
     }
 
     @EventHandler
@@ -82,11 +101,22 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
             player.sendMessage(lang.getMessage("prefix") + lang.getMessage("version_warning", service.updateResult().getLatestVersion()));
         }
         service.onPlayerJoin(player.getName(), player.getUniqueId());
+        recordStats(player, "join");
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        recordStats(event.getPlayer(), "quit");
         service.onPlayerQuit(event.getPlayer().getName(), event.getPlayer().getUniqueId());
+    }
+
+    /** Olay oyuncunun thread'inde: istatistik burada okunur, gönderim io thread'inde (#529) */
+    private void recordStats(Player player, String reason) {
+        try {
+            service.recordPlayerStats(SpigotPlatform.snapshot(player), reason);
+        } catch (RuntimeException e) {
+            getLogger().fine("Could not read playtime statistic: " + e.getMessage());
+        }
     }
 
     @Override
@@ -167,6 +197,7 @@ public class CrafterSpigotPlugin extends JavaPlugin implements Listener {
     // --- Menüler ve PlaceholderAPI için ---
 
     public CrafterConnectService getService() { return service; }
+    SpigotAfk afk() { return afk; }
     public LanguageManager getLanguageManager() { return service.lang(); }
     public StatisticsManager getStatsManager() { return service.statsManager(); }
     public PlayerManager getPlayerManager() { return service.playerManager(); }

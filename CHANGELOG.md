@@ -18,6 +18,10 @@
 - Sunucu her 30 saniyede durumunu (çevrimiçi oyuncu) bildirir.
 - 1.x'teki "yeni sürümden 7 gün sonra eklentiyi kapatma" kaldırıldı; asgari sürümün altındaysa konsolda uyarı gösterilir.
 - Eski kurulumlar (`website-id`, `plugin-secret`, `server-id`) güncellemeden sonra çalışmaya devam eder.
+- **Oynama süresi (Paper/Spigot):** süre oyunun kendi istatistiğinden (`PLAY_ONE_MINUTE`) 5 dakikada bir, girişte
+  ve çıkışta gönderilir; AFK süresi ayrı sayılır (Essentials, CMI ya da hareketsizlik eşiği). Bağlantı yokken
+  `data/playtime.json` dosyasında bekler; çökmede süre kaybolmaz ya da şişmez. Velocity/BungeeCord süre göndermez.
+  Ayarlar: `playtime.*`.
 
 ### English
 
@@ -36,3 +40,7 @@
 - The 1.x "disable the plugin 7 days after a new release" behaviour is removed; a console warning is shown when the
   version is below the minimum.
 - Existing installs (`website-id`, `plugin-secret`, `server-id`) keep working after the update.
+- **Playtime (Paper/Spigot):** taken from the game's own statistic (`PLAY_ONE_MINUTE`) every 5 minutes, on join and
+  on quit; AFK time is counted separately (Essentials, CMI or an idle threshold). Queued in `data/playtime.json`
+  while offline; a crash neither loses nor inflates playtime. Velocity/BungeeCord do not report playtime.
+  Settings: `playtime.*`.

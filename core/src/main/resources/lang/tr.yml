@@ -85,6 +85,7 @@ messages:
   status_server_line: " §7» §fSunucu ID: §e{0}"
   status_version_line: " §7» §fSürüm: §e{0} §7({1})"
   status_outbox_line: " §7» §fGönderilmeyi bekleyen onay: §e{0}"
+  status_playtime_queue_line: " §7» §fGönderilmeyi bekleyen oynama süresi örneği: §e{0}"
   status_update_required: "§cBu sürüm desteklenmiyor. En az {0} sürümüne güncelleyin."
   console_not_connected: "Sunucu Crafter'a bağlı değil. Panelde Ayarlar → Sunucular → Sunucu bağla ile kod üretip /crafter connect <kod> çalıştırın."
   console_legacy_warning: "Eski bağlantı (website-id, plugin-secret, server-id) kullanılıyor. Panelden yeni kod üretip /crafter connect çalıştırın."

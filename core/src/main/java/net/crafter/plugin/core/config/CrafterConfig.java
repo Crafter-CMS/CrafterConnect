@@ -39,6 +39,11 @@ public class CrafterConfig {
     private boolean reportPlayers = true;
     private String bedrockPlayerPrefix = "";
     private List<String> allowedCommandPrefixes = new ArrayList<>();
+    private boolean playtimeEnabled = true;
+    private int playtimeSampleMinutes = 5;
+    private String afkSource = "auto";
+    private int afkMinutes = 5;
+    private boolean playtimeImportHistory = false;
 
     /** config.yml'dan okur; eksik alanlarda varsayılan kullanılır */
     public static CrafterConfig from(ConfigSource src) {
@@ -57,6 +62,11 @@ public class CrafterConfig {
         cfg.setReportPlayers(src.getBoolean("report-players", true));
         cfg.setBedrockPlayerPrefix(src.getString("bedrock-player-prefix", ""));
         cfg.setAllowedCommandPrefixes(src.getStringList("allowed-command-prefixes"));
+        cfg.setPlaytimeEnabled(src.getBoolean("playtime.enabled", true));
+        cfg.setPlaytimeSampleMinutes(src.getInt("playtime.sample-minutes", 5));
+        cfg.setAfkSource(src.getString("playtime.afk-source", "auto"));
+        cfg.setAfkMinutes(src.getInt("playtime.afk-minutes", 5));
+        cfg.setPlaytimeImportHistory(src.getBoolean("playtime.import-history", false));
         return cfg;
     }
 
@@ -161,6 +171,29 @@ public class CrafterConfig {
     public void setAllowedCommandPrefixes(List<String> allowedCommandPrefixes) {
         this.allowedCommandPrefixes = allowedCommandPrefixes == null ? new ArrayList<>() : new ArrayList<>(allowedCommandPrefixes);
     }
+
+    // --- Oynama süresi (#529, yalnızca Paper/Spigot) ---
+
+    public boolean isPlaytimeEnabled() { return playtimeEnabled; }
+    public void setPlaytimeEnabled(boolean playtimeEnabled) { this.playtimeEnabled = playtimeEnabled; }
+
+    /** 1–60 dk */
+    public int getPlaytimeSampleMinutes() { return playtimeSampleMinutes; }
+    public void setPlaytimeSampleMinutes(int minutes) { this.playtimeSampleMinutes = Math.max(1, Math.min(60, minutes)); }
+
+    /** auto | essentials | cmi | idle | none */
+    public String getAfkSource() { return afkSource; }
+    public void setAfkSource(String afkSource) {
+        String v = afkSource == null ? "" : afkSource.trim().toLowerCase(Locale.ROOT);
+        this.afkSource = List.of("auto", "essentials", "cmi", "idle", "none").contains(v) ? v : "auto";
+    }
+
+    /** Hareketsizlik eşiği, 1–120 dk */
+    public int getAfkMinutes() { return afkMinutes; }
+    public void setAfkMinutes(int minutes) { this.afkMinutes = Math.max(1, Math.min(120, minutes)); }
+
+    public boolean isPlaytimeImportHistory() { return playtimeImportHistory; }
+    public void setPlaytimeImportHistory(boolean v) { this.playtimeImportHistory = v; }
 
     private static boolean isValidValue(String val, String defaultVal, String... legacyDefaults) {
         if (val == null) return false;

@@ -6,7 +6,7 @@ folia-supported: true
 description: Crafter store delivery, in-game shop and chest
 author: Crafter
 website: https://crafter.net.tr
-softdepend: [PlaceholderAPI, floodgate]
+softdepend: [PlaceholderAPI, floodgate, Essentials, CMI]
 
 commands:
   crafter:

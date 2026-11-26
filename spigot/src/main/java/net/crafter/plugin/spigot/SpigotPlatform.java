@@ -5,6 +5,10 @@ import net.crafter.plugin.core.config.ConfigSource;
 import net.crafter.plugin.core.platform.CrafterLog;
 import net.crafter.plugin.core.platform.FloodgateBridge;
 import net.crafter.plugin.core.platform.Platform;
+import net.crafter.plugin.core.playtime.AfkSource;
+import net.crafter.plugin.core.playtime.PlayerSnapshot;
+import net.crafter.plugin.core.playtime.SnapshotBatch;
+import org.bukkit.Statistic;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -17,6 +21,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -187,6 +193,71 @@ public class SpigotPlatform implements Platform {
     @Override
     public CrafterLog log() {
         return log;
+    }
+
+    // --- Oynama süresi (#529) ---
+
+    @Override
+    public boolean supportsPlayerStats() {
+        return true;
+    }
+
+    /** Oyuncunun thread'inde çağrılmalı (Paper/Spigot: ana thread; Folia: oyuncunun bölgesi) */
+    static PlayerSnapshot snapshot(Player player) {
+        long ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE); // adı yanıltıcı: tick sayar
+        return new PlayerSnapshot(player.getUniqueId(), player.getName(), PlayerSnapshot.ticksToSeconds(ticks));
+    }
+
+    @Override
+    public void collectPlayerStats(Consumer<List<PlayerSnapshot>> done) {
+        List<Player> players = new ArrayList<>(Bukkit.getOnlinePlayers());
+        if (players.isEmpty()) {
+            done.accept(List.of());
+            return;
+        }
+        if (!scheduler.isFolia()) {
+            scheduler.runGlobal(() -> {
+                List<PlayerSnapshot> out = new ArrayList<>();
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    try {
+                        out.add(snapshot(p));
+                    } catch (RuntimeException e) {
+                        log.debug("[CrafterConnect] Could not read statistic for " + p.getName() + ": " + e.getMessage());
+                    }
+                }
+                done.accept(out);
+            });
+            return;
+        }
+        // Folia: her oyuncu kendi bölgesinde okunur; hepsi (ya da çıkanlar) bitince toplu teslim
+        SnapshotBatch batch = new SnapshotBatch(players.size(), done);
+        for (Player p : players) {
+            try {
+                scheduler.runForPlayer(p, () -> {
+                    PlayerSnapshot snap = null;
+                    try {
+                        snap = snapshot(p);
+                    } catch (RuntimeException e) {
+                        log.debug("[CrafterConnect] Could not read statistic for " + p.getName() + ": " + e.getMessage());
+                    }
+                    batch.add(snap);
+                }, batch::skip);
+            } catch (RuntimeException e) {
+                batch.skip();
+            }
+        }
+    }
+
+    @Override
+    public Collection<UUID> onlinePlayerIds() {
+        List<UUID> ids = new ArrayList<>();
+        for (Player p : Bukkit.getOnlinePlayers()) ids.add(p.getUniqueId());
+        return ids;
+    }
+
+    @Override
+    public AfkSource afkSource(String mode, long idleThresholdMs) {
+        return plugin.afk().select(mode, idleThresholdMs);
     }
 
     /** LanguageManager kısayolu */

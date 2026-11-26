@@ -1,6 +1,7 @@
 package net.crafter.plugin.core.websocket;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
@@ -66,6 +67,8 @@ public class CrafterWebSocketClient extends WebSocketClient {
         /** Token geçersiz ya da kaldırıldı: yeniden bağlanma durdu */
         void onTokenRejected(String reason);
         default void onDisconnected() {}
+        /** player_stats_ack: ACK'lenen örnek anahtarları (#529) */
+        default void onPlayerStatsAck(List<String> keys) {}
     }
 
     private final CrafterConfig config;
@@ -256,6 +259,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
             case "purchase_response" -> handlePurchaseResponse(message);
             case "chest_content" -> handleChestContent(message);
             case "use_item_response" -> handleUseItemResponse(message);
+            case "player_stats_ack" -> handlePlayerStatsAck(message);
             case "ping" -> sendRaw(gson.toJson(new CrafterMessage(MessageType.PONG, null)));
             default -> log.debug("[CrafterConnect] Unknown message type: " + type);
         }
@@ -330,6 +334,10 @@ public class CrafterWebSocketClient extends WebSocketClient {
         if (info.floodgatePrefix() != null && !info.floodgatePrefix().isEmpty()) {
             data.addProperty("floodgatePrefix", info.floodgatePrefix());
         }
+        // Yetenekler: player_stats gönderen sunucuda backend eski join/leave süre hesabını kapatır (#529)
+        JsonArray capabilities = new JsonArray();
+        if (platform.supportsPlayerStats() && config.isPlaytimeEnabled()) capabilities.add("player_stats");
+        data.add("capabilities", capabilities);
         sendEvent("hello", data);
     }
 
@@ -343,6 +351,23 @@ public class CrafterWebSocketClient extends WebSocketClient {
         } catch (Throwable t) {
             log.debug("[CrafterConnect] Heartbeat failed: " + t.getMessage());
         }
+    }
+
+    /** Oynama süresi örnekleri (#529); bağlı ve doğrulanmış değilse false */
+    public boolean sendPlayerStats(JsonObject data) {
+        if (!isOpen() || !authenticated.get()) return false;
+        return sendEvent("player_stats", data);
+    }
+
+    private void handlePlayerStatsAck(CrafterMessage message) {
+        JsonObject p = message.getPayload();
+        List<String> keys = new ArrayList<>();
+        if (p != null && p.has("keys") && p.get("keys").isJsonArray()) {
+            for (JsonElement e : p.getAsJsonArray("keys")) {
+                if (e.isJsonPrimitive()) keys.add(e.getAsString());
+            }
+        }
+        if (listener != null) listener.onPlayerStatsAck(keys);
     }
 
     private boolean sendEvent(String eventName, JsonObject data) {
@@ -464,9 +489,15 @@ public class CrafterWebSocketClient extends WebSocketClient {
     }
 
     private void sendPlayerEvent(String event, String username, PlayerIdentity identity) {
+        sendPlayerEvent(event, username, identity, false);
+    }
+
+    /** refresh: yalnızca bakiye/rol tazeleme; backend oturum başlatmaz (#529) */
+    private void sendPlayerEvent(String event, String username, PlayerIdentity identity, boolean refresh) {
         JsonObject data = new JsonObject();
         data.addProperty("username", username);
         addIdentity(data, username, identity);
+        if (refresh) data.addProperty("refresh", true);
         sendEvent(event, data);
     }
 
@@ -539,7 +570,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         if (success) {
             // Satın alma sonrası sandık ve bakiye tazelenir
             getChest(username, null);
-            sendPlayerEvent("player_join", username, null);
+            sendPlayerEvent("player_join", username, null, true);
         }
         platform.handlePurchaseResponse(username, success, msg);
     }
@@ -561,7 +592,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         LanguageManager lang = languageManager.get();
         if (success) {
             getChest(username, null);
-            sendPlayerEvent("player_join", username, null);
+            sendPlayerEvent("player_join", username, null, true);
             platform.sendMessage(username, lang.getMessage("prefix") + lang.getMessage("item_used_success", msg));
         } else {
             platform.sendMessage(username, lang.getMessage("prefix") + lang.getMessage("item_used_error", msg));

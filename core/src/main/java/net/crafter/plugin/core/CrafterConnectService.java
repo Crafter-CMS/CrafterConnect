@@ -17,6 +17,10 @@ import net.crafter.plugin.core.model.PlayerIdentity;
 import net.crafter.plugin.core.platform.CrafterLog;
 import net.crafter.plugin.core.platform.FloodgateBridge;
 import net.crafter.plugin.core.platform.Platform;
+import net.crafter.plugin.core.playtime.AfkSource;
+import net.crafter.plugin.core.playtime.PlayerSnapshot;
+import net.crafter.plugin.core.playtime.PlaytimeReporter;
+import net.crafter.plugin.core.playtime.PlaytimeStore;
 import net.crafter.plugin.core.websocket.CrafterWebSocketClient;
 
 import java.io.IOException;
@@ -61,6 +65,16 @@ public class CrafterConnectService {
     private CommandStore store;
     private CommandProcessor processor;
     private ScheduledExecutorService io;
+    /** Oynama süresi (#529); proxy'lerde ve playtime.enabled: false iken null */
+    private volatile PlaytimeReporter playtime;
+    private volatile AfkSource afkSource;
+    private volatile ScheduledFuture<?> sampleTask;
+    private volatile ScheduledFuture<?> afkTask;
+
+    static final long AFK_POLL_SECONDS = 30;
+    /** Zamanlayıcı birimi: ayardaki "dakika" (testler kısaltır) */
+    long playtimeMinuteMs = 60_000;
+    long afkPollMs = AFK_POLL_SECONDS * 1000;
 
     /** data/connection.json: gizli olmayan bağlantı bilgisi (mağaza adı, sunucu id) */
     static final class ConnectionInfo {
@@ -100,10 +114,12 @@ public class CrafterConnectService {
             processor = new CommandProcessor(store, platform, this::guard, log);
         }
         connectionInfo = readConnectionInfo();
+        startPlaytime();
         startClient();
     }
 
     public synchronized void stop() {
+        stopPlaytime();
         stopClient();
         if (io != null) {
             io.shutdownNow();
@@ -114,8 +130,98 @@ public class CrafterConnectService {
     /** /crafter reload: ayar ve dil dosyasını yeniden okur, bağlantıyı yeniden kurar */
     public synchronized void reload() {
         stopClient();
+        stopPlaytime();
         loadSettings();
+        startPlaytime();
         startClient();
+    }
+
+    // --- Oynama süresi (#529) ---
+
+    /** Paper/Spigot: 5 dk'da bir (ayar) istatistik örneği, 30 sn'de bir AFK yoklaması */
+    private void startPlaytime() {
+        if (!platform.supportsPlayerStats() || !config.isPlaytimeEnabled() || io == null) return;
+        if (playtime == null) {
+            PlaytimeStore ps = new PlaytimeStore(dataDir().resolve("playtime.json"), log);
+            playtime = new PlaytimeReporter(ps, afkPollMs, System::currentTimeMillis, log);
+        }
+        playtime.setImportHistory(config.isPlaytimeImportHistory());
+        try {
+            afkSource = platform.afkSource(config.getAfkSource(), config.getAfkMinutes() * 60_000L);
+        } catch (RuntimeException e) {
+            log.warn("[CrafterConnect] AFK detection unavailable: " + e.getMessage());
+            afkSource = null;
+        }
+        long sample = config.getPlaytimeSampleMinutes() * playtimeMinuteMs;
+        sampleTask = io.scheduleWithFixedDelay(this::samplePlaytime, sample, sample, TimeUnit.MILLISECONDS);
+        afkTask = io.scheduleWithFixedDelay(this::pollAfk, afkPollMs, afkPollMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void stopPlaytime() {
+        if (sampleTask != null) sampleTask.cancel(false);
+        if (afkTask != null) afkTask.cancel(false);
+        sampleTask = null;
+        afkTask = null;
+    }
+
+    private void samplePlaytime() {
+        PlaytimeReporter r = playtime;
+        if (r == null) return;
+        try {
+            platform.collectPlayerStats(list -> {
+                r.record(list, "interval");
+                flushPlaytime();
+            });
+        } catch (Throwable t) {
+            log.debug("[CrafterConnect] Playtime sample failed: " + t.getMessage());
+        }
+    }
+
+    private void pollAfk() {
+        PlaytimeReporter r = playtime;
+        if (r == null) return;
+        try {
+            r.pollAfk(platform.onlinePlayerIds(), afkSource);
+        } catch (Throwable t) {
+            log.debug("[CrafterConnect] AFK poll failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Giriş ve çıkışta oyuncunun thread'inden çağrılır (istatistik orada okunur); disk ve ağ işi io thread'inde.
+     * Backend sıradan bağımsızdır: çıkış örneği player_left'ten sonra gelse de süre bir kez yazılır.
+     */
+    public void recordPlayerStats(PlayerSnapshot snapshot, String reason) {
+        PlaytimeReporter r = playtime;
+        ScheduledExecutorService exec = io;
+        if (r == null || snapshot == null || sampleTask == null || exec == null) return;
+        try {
+            exec.execute(() -> {
+                r.record(List.of(snapshot), reason);
+                flushPlaytime();
+            });
+        } catch (RejectedExecutionException e) {
+            // kapanırken: örnek doğrudan kuyruğa yazılır, sonraki açılışta gönderilir
+            r.record(List.of(snapshot), reason);
+        }
+    }
+
+    /** Kapanışta ana thread'den: son değerler eşzamanlı kuyruğa yazılır, bir sonraki açılışta gönderilir */
+    public void recordShutdown(List<PlayerSnapshot> snapshots) {
+        PlaytimeReporter r = playtime;
+        if (r == null || snapshots == null || snapshots.isEmpty() || sampleTask == null) return;
+        try {
+            r.record(snapshots, "quit");
+        } catch (RuntimeException e) {
+            log.debug("[CrafterConnect] Playtime shutdown sample failed: " + e.getMessage());
+        }
+    }
+
+    private void flushPlaytime() {
+        PlaytimeReporter r = playtime;
+        CrafterWebSocketClient c = wsClient;
+        if (r == null || c == null) return;
+        r.flush(senderOf(c));
     }
 
     private void loadSettings() {
@@ -154,6 +260,15 @@ public class CrafterConnectService {
                     @Override public void onAuthenticated(CrafterWebSocketClient.AuthInfo info) {
                         auth = info;
                         checkMinVersionAsync(info.websiteId() != null ? info.websiteId() : config.getWebsiteId());
+                        PlaytimeReporter r = playtime;
+                        if (r != null) {
+                            r.onConnected();
+                            r.flush(senderOf(wsClient));
+                        }
+                    }
+                    @Override public void onPlayerStatsAck(List<String> keys) {
+                        PlaytimeReporter r = playtime;
+                        if (r != null) r.onAck(keys, senderOf(wsClient));
                     }
                     @Override public void onTokenRejected(String reason) {
                         console("console_token_rejected");
@@ -161,6 +276,11 @@ public class CrafterConnectService {
                 });
         wsClient = client;
         client.start();
+    }
+
+    /** Bağlantı yoksa her gönderimi reddeden gönderici */
+    private PlaytimeReporter.Sender senderOf(CrafterWebSocketClient c) {
+        return c == null ? data -> false : c::sendPlayerStats;
     }
 
     private void stopClient() {
@@ -267,6 +387,8 @@ public class CrafterConnectService {
         lines.add(p + lang.getMessage("status_server_line", serverId));
         lines.add(p + lang.getMessage("status_version_line", BuildInfo.version(), platform.platformId()));
         lines.add(p + lang.getMessage("status_queue_line", store == null ? 0 : store.queuedCount()));
+        PlaytimeReporter pt = playtime;
+        if (pt != null && pt.queued() > 0) lines.add(p + lang.getMessage("status_playtime_queue_line", pt.queued()));
         if (store != null && store.outgoingCount() > 0) {
             lines.add(p + lang.getMessage("status_outbox_line", store.outgoingCount()));
         }
@@ -414,4 +536,5 @@ public class CrafterConnectService {
     public UpdateCheckResult updateResult() { return updateResult; }
     /** Testler için */
     CommandProcessor processor() { return processor; }
+    PlaytimeReporter playtime() { return playtime; }
 }
