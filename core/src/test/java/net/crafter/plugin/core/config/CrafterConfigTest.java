@@ -106,4 +106,19 @@ public class CrafterConfigTest {
         assertFalse(c.isReportPlayers());
         assertEquals(java.util.List.of("lp user"), c.getAllowedCommandPrefixes());
     }
+
+    @org.junit.jupiter.api.Test
+    void playtimeSettingsAreClamped() {
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("playtime.sample-minutes", "0");
+        m.put("playtime.afk-minutes", "999");
+        m.put("playtime.afk-source", "../evil");
+        CrafterConfig c = CrafterConfig.from(net.crafter.plugin.core.support.Fakes.mapSource(m));
+        org.junit.jupiter.api.Assertions.assertTrue(c.isPlaytimeEnabled());
+        org.junit.jupiter.api.Assertions.assertEquals(1, c.getPlaytimeSampleMinutes());
+        org.junit.jupiter.api.Assertions.assertEquals(120, c.getAfkMinutes());
+        org.junit.jupiter.api.Assertions.assertEquals("auto", c.getAfkSource());
+        org.junit.jupiter.api.Assertions.assertFalse(c.isPlaytimeImportHistory());
+        org.junit.jupiter.api.Assertions.assertEquals(5, new CrafterConfig().getPlaytimeSampleMinutes());
+    }
 }

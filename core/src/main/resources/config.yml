@@ -38,6 +38,23 @@ allowed-command-prefixes: []
 # böylece oyuncular iki kez sayılmaz. / Set to false on backend servers when the proxy also runs CrafterConnect.
 report-players: true
 
+# Oynama süresi ve AFK / Playtime and AFK (yalnızca Paper/Spigot / Paper/Spigot only)
+# Süre oyunun kendi istatistiğinden (PLAY_ONE_MINUTE) 5 dakikada bir ve çıkışta gönderilir; çökmede kaybolmaz,
+# bağlantı yokken data/playtime.json'da bekler. Velocity/BungeeCord süre göndermez (oyuncular iki kez sayılmaz).
+# Taken from the game's own statistic every few minutes and on quit; queued in data/playtime.json while offline.
+playtime:
+  enabled: true
+  # Örnek aralığı (dk) / Sample interval in minutes (1-60)
+  sample-minutes: 5
+  # AFK kaynağı / AFK source: auto (Essentials, yoksa CMI, yoksa hareketsizlik), essentials, cmi, idle, none
+  afk-source: auto
+  # Hareketsizlik eşiği (dk, afk-source idle ya da auto'da eklenti yoksa) / Idle threshold in minutes
+  afk-minutes: 5
+  # true: oyuncunun bu sunucudaki geçmiş toplam süresi ilk gönderimde bir kez eklenir. Sunucu daha önce eski
+  # eklentiyle süre sayıyorsa açmayın (çift sayım olur).
+  # true: imports each player's past total once on the first sample. Leave off if this server already reported playtime.
+  import-history: false
+
 # Ayrıntılı log / Verbose logging
 debug-mode: false
 

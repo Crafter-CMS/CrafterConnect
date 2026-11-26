@@ -66,13 +66,23 @@ public final class SpigotScheduler {
 
     /** Oyuncuya ait işlem (envanter açma vb.); oyuncu çıktıysa çalışmaz */
     public void runForPlayer(Player player, Runnable task) {
+        runForPlayer(player, task, null);
+    }
+
+    /**
+     * Oyuncuya ait işlem; Folia'da oyuncu çıkmışsa {@code retired} çalışır (null olabilir). Paper/Spigot'ta ana
+     * thread'de çalışır.
+     */
+    public void runForPlayer(Player player, Runnable task, Runnable retired) {
         if (!folia) {
             Bukkit.getScheduler().runTask(plugin, task);
             return;
         }
         try {
             Consumer<Object> consumer = ignored -> task.run();
-            entityRun.invoke(entityScheduler.invoke(player), plugin, consumer, null);
+            Object scheduled = entityRun.invoke(entityScheduler.invoke(player), plugin, consumer, retired);
+            // run() null dönerse varlık zaten kaldırılmıştır
+            if (scheduled == null && retired != null) retired.run();
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);
         }

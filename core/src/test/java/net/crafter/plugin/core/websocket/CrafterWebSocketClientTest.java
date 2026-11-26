@@ -128,6 +128,8 @@ class CrafterWebSocketClientTest {
             assertEquals("1.21.4", hello.get("gameVersion").getAsString());
             assertEquals(100, hello.get("maxPlayers").getAsInt());
             assertEquals(".", hello.get("floodgatePrefix").getAsString());
+            // Sahte platform istatistik okumaz (proxy gibi): player_stats yeteneği bildirilmez (#529)
+            assertEquals(0, hello.getAsJsonArray("capabilities").size());
 
             JsonObject ack1 = JsonParser.parseString(nextEvent(server.received, "ack")).getAsJsonObject().getAsJsonObject("data");
             assertEquals("cmd_1", ack1.get("commandId").getAsString());

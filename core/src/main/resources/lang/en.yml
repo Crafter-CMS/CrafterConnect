@@ -85,6 +85,7 @@ messages:
   status_server_line: " §7» §fServer ID: §e{0}"
   status_version_line: " §7» §fVersion: §e{0} §7({1})"
   status_outbox_line: " §7» §fConfirmations waiting to be sent: §e{0}"
+  status_playtime_queue_line: " §7» §fPlaytime samples waiting to be sent: §e{0}"
   status_update_required: "§cThis version is no longer supported. Update to at least {0}."
   console_not_connected: "The server is not connected to Crafter. Create a code in the dashboard (Settings → Servers → Connect a server) and run /crafter connect <code>."
   console_legacy_warning: "Using a legacy connection (website-id, plugin-secret, server-id). Create a new code in the dashboard and run /crafter connect."
