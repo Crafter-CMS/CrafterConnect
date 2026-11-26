@@ -2,13 +2,13 @@ package net.crafter.plugin.core.config;
 
 import java.util.List;
 
-/** Platformun YAML okuyucusu üzerinde ince bir katman (Bukkit, Configurate, BungeeCord config) */
+/** Thin layer over the platform's YAML reader (Bukkit, Configurate, BungeeCord config) */
 public interface ConfigSource {
-    /** Anahtar dosyada var mı */
+    /** Whether the key exists in the file */
     boolean has(String key);
     String getString(String key, String def);
     int getInt(String key, int def);
     boolean getBoolean(String key, boolean def);
-    /** Yoksa boş liste */
+    /** Empty list if missing */
     List<String> getStringList(String key);
 }

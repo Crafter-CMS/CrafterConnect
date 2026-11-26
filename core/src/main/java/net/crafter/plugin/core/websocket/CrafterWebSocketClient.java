@@ -33,41 +33,41 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
- * Crafter WebSocket bağlantısı (protokol 2, #37 bölüm 3).
+ * Crafter WebSocket connection (protocol 2, #37 section 3).
  *
  * <ul>
- *   <li>Token ile: {@code wss://api.crafter.net.tr/website/plugin/wss?protocol=2} + {@code Authorization: Bearer cct_…}.
- *   Token adres satırına yazılmaz.</li>
- *   <li>Eski bağlantı: {@code ?website-id=…&plugin-secret=…&server-id=…&protocol=2}. Adres loglanmaz.</li>
- *   <li>Kimlik doğrulamadan sonra {@code hello} (platform, sürüm, Minecraft sürümü, maxPlayers, floodgatePrefix),
- *   30 sn'de bir {@code heartbeat} gönderilir ve bekleyen ACK/NACK'ler yollanır.</li>
- *   <li>Bağlantı koparsa üstel bekleme ve rastgele sapmayla yeniden bağlanır. Token geçersizse ya da başka bir
- *   kodla yeniden bağlanıldıysa denemeyi bırakır.</li>
+ *   <li>With a token: {@code wss://api.crafter.net.tr/website/plugin/wss?protocol=2} + {@code Authorization: Bearer cct_…}.
+ *   The token is never put in the URL.</li>
+ *   <li>Legacy connection: {@code ?website-id=…&plugin-secret=…&server-id=…&protocol=2}. The URL is never logged.</li>
+ *   <li>After authentication {@code hello} (platform, version, Minecraft version, maxPlayers, floodgatePrefix) is sent,
+ *   a {@code heartbeat} every 30 seconds, and pending ACK/NACKs are flushed.</li>
+ *   <li>If the connection drops it reconnects with exponential backoff and random jitter. It stops retrying if the token is
+ *   invalid or the server was reconnected with another code.</li>
  * </ul>
  */
 public class CrafterWebSocketClient extends WebSocketClient {
 
     static final int HEARTBEAT_SECONDS = 30;
     /**
-     * Bağlantı canlılığı: istemci 30 sn'de bir ping gönderir (Cloudflare'in 100 sn boşta kalma sınırının altında;
-     * backend de 30 sn'de bir ping atar). 90 sn hiçbir veri ya da pong gelmezse soket yarı açık sayılır ve yeniden
-     * kurulur. Java-WebSocket'in kendi kontrolü (connectionLostTimeout × 1,5) de 90 sn'ye ayarlanır; 1.x'teki
-     * 25 sn (37,5 sn tolerans) ve 60 sn watchdog geç gelen bir pong'da bağlantıyı gereksiz yere koparıyordu.
+     * Connection liveness: the client sends a ping every 30 seconds (below Cloudflare's 100-second idle limit;
+     * the backend also pings every 30 seconds). If no data or pong arrives for 90 seconds the socket is treated as half-open and
+     * re-established. Java-WebSocket's own check (connectionLostTimeout × 1.5) is also set to 90 seconds; the 1.x
+     * 25 seconds (37.5 seconds tolerance) and 60-second watchdog needlessly dropped the connection on a late pong.
      */
     static final int PING_SECONDS = 30;
     static final int DEAD_AFTER_SECONDS = 90;
     static final int MAX_BACKOFF_SECONDS = 120;
 
-    /** Backend'in v2 kimlik doğrulama bilgisi */
+    /** The backend's v2 authentication info */
     public record AuthInfo(String websiteId, String serverId, String identityType, List<String> allowedCommandPrefixes) {}
 
-    /** Bağlantı olayları (CrafterConnectService dinler) */
+    /** Connection events (listened to by CrafterConnectService) */
     public interface Listener {
         void onAuthenticated(AuthInfo info);
-        /** Token geçersiz ya da kaldırıldı: yeniden bağlanma durdu */
+        /** Token invalid or removed: reconnecting stopped */
         void onTokenRejected(String reason);
         default void onDisconnected() {}
-        /** player_stats_ack: ACK'lenen örnek anahtarları (#529) */
+        /** player_stats_ack: keys of the ACKed samples (#529) */
         default void onPlayerStatsAck(List<String> keys) {}
     }
 
@@ -111,7 +111,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         this.log = platform.log();
         this.backoff = new Backoff(config.getReconnectDelaySeconds(), MAX_BACKOFF_SECONDS);
 
-        // RFC 6455 Ping/Pong; kütüphanenin kendi kontrolü 60 × 1,5 = 90 sn pong gelmezse kapatır
+        // RFC 6455 Ping/Pong; the library's own check closes after 60 × 1.5 = 90 seconds without a pong
         setConnectionLostTimeout(DEAD_AFTER_SECONDS * 2 / 3);
         setTcpNoDelay(true);
     }
@@ -175,7 +175,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         try {
             close();
         } catch (Exception ignored) {
-            // zaten kapalı
+            // already closed
         }
     }
 
@@ -224,7 +224,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         scheduleReconnect();
     }
 
-    /** 1008 "Invalid server token" ya da 4001 (yeniden bağlama/silme) yalnızca token bağlantısında kalıcıdır */
+    /** 1008 "Invalid server token" or 4001 (reconnected/deleted) is permanent only on a token connection */
     boolean isTokenRevocation(int code, String reason) {
         if (config.mode() != CrafterConfig.Mode.TOKEN) return false;
         String r = reason == null ? "" : reason.toLowerCase(Locale.ROOT);
@@ -311,7 +311,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         processor.onCommand(pc);
     }
 
-    // --- Gönderim ---
+    // --- Sending ---
 
     private boolean sendOutgoing(CommandStore.Outgoing o) {
         if (!isOpen() || !authenticated.get()) return false;
@@ -334,7 +334,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         if (info.floodgatePrefix() != null && !info.floodgatePrefix().isEmpty()) {
             data.addProperty("floodgatePrefix", info.floodgatePrefix());
         }
-        // Yetenekler: player_stats gönderen sunucuda backend eski join/leave süre hesabını kapatır (#529)
+        // Capabilities: for a server that sends player_stats the backend turns off the legacy join/leave time calculation (#529)
         JsonArray capabilities = new JsonArray();
         if (platform.supportsPlayerStats() && config.isPlaytimeEnabled()) capabilities.add("player_stats");
         data.add("capabilities", capabilities);
@@ -353,7 +353,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         }
     }
 
-    /** Oynama süresi örnekleri (#529); bağlı ve doğrulanmış değilse false */
+    /** Playtime samples (#529); false if not connected and authenticated */
     public boolean sendPlayerStats(JsonObject data) {
         if (!isOpen() || !authenticated.get()) return false;
         return sendEvent("player_stats", data);
@@ -388,7 +388,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         }
     }
 
-    // --- Yeniden bağlanma ---
+    // --- Reconnecting ---
 
     private void runWatchdog() {
         if (!running.get()) return;
@@ -400,13 +400,13 @@ public class CrafterWebSocketClient extends WebSocketClient {
                     log.debug("[CrafterConnect] Failed to send protocol ping: " + e.getMessage());
                 }
                 long elapsed = System.currentTimeMillis() - lastReceivedTimestamp;
-                // DEAD_AFTER_SECONDS boyunca hiçbir veri ya da pong gelmediyse soket yarı açık kabul edilir
+                // If no data or pong arrived for DEAD_AFTER_SECONDS the socket is treated as half-open
                 if (elapsed > DEAD_AFTER_SECONDS * 1000L) {
                     log.warn("[CrafterConnect] No response from server for " + elapsed / 1000 + "s. Resetting the connection...");
                     try {
                         closeConnection(1006, "Watchdog timeout");
                     } catch (Exception e) {
-                        try { close(); } catch (Exception ignored) { /* kapalı */ }
+                        try { close(); } catch (Exception ignored) { /* closed */ }
                     }
                     scheduleReconnect();
                 }
@@ -445,7 +445,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         reconnectFuture = scheduler.schedule(() -> {
             boolean open = false;
             try {
-                // Bloklayan sürüm: el sıkışma bitmeden "bağlanamadı" sanılıp yeni deneme planlanmaz
+                // Blocking variant: a new attempt is not scheduled by mistaking an unfinished handshake for "could not connect"
                 if (running.get() && !stopReconnecting && !isOpen()) open = reconnectBlocking();
                 else open = isOpen();
             } catch (InterruptedException e) {
@@ -466,7 +466,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         reconnectFuture = null;
     }
 
-    // --- Oyuncu olayları ---
+    // --- Player events ---
 
     private void syncOnlinePlayers() {
         try {
@@ -478,7 +478,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         }
     }
 
-    /** Oyuncu girdi: backend'e bildirir, sandığı ister; kuyruk çekirdek serviste işlenir */
+    /** Player joined: notifies the backend and requests the chest; the queue is processed in the core service */
     public void onPlayerJoin(String username, PlayerIdentity identity) {
         if (config.isReportPlayers()) sendPlayerEvent("player_join", username, identity);
         getChest(username, identity);
@@ -492,7 +492,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         sendPlayerEvent(event, username, identity, false);
     }
 
-    /** refresh: yalnızca bakiye/rol tazeleme; backend oturum başlatmaz (#529) */
+    /** refresh: only refreshes balance/roles; the backend does not start a session (#529) */
     private void sendPlayerEvent(String event, String username, PlayerIdentity identity, boolean refresh) {
         JsonObject data = new JsonObject();
         data.addProperty("username", username);
@@ -536,7 +536,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         data.add("identity", obj);
     }
 
-    // --- Mağaza mesajları ---
+    // --- Store messages ---
 
     private void handlePlayerInfo(CrafterMessage message) {
         if (message.getPayload() == null) return;
@@ -568,7 +568,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         boolean success = payload.has("success") && payload.get("success").getAsBoolean();
         String msg = Objects.requireNonNullElse(str(payload, "message"), "");
         if (success) {
-            // Satın alma sonrası sandık ve bakiye tazelenir
+            // Chest and balance are refreshed after a purchase
             getChest(username, null);
             sendPlayerEvent("player_join", username, null, true);
         }
@@ -608,7 +608,7 @@ public class CrafterWebSocketClient extends WebSocketClient {
         return isOpen() && authenticated.get();
     }
 
-    /** Son hata kodu (server_token_invalid, LICENSE_ERROR …), yoksa null */
+    /** Last error code (server_token_invalid, LICENSE_ERROR …), null if none */
     public String lastError() {
         return lastError;
     }

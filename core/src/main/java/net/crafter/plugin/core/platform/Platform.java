@@ -14,21 +14,21 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Paper/Spigot, Velocity ve BungeeCord modüllerinin çekirdeğe sağladığı bağlantı noktaları.
+ * Bindings that the Paper/Spigot, Velocity and BungeeCord modules provide to the core.
  */
 public interface Platform extends CommandExecutor {
 
     /** Katalogdaki platform id'si: paper | spigot | velocity | bungeecord */
     String platformId();
 
-    /** Minecraft (ya da proxy) sürümü, örn. "1.21.4" */
+    /** Minecraft (or proxy) version, e.g. "1.21.4" */
     String gameVersion();
 
     int onlinePlayers();
 
     int maxPlayers();
 
-    /** Sunucunun dinlediği adres (yalnızca vitrinde gösterim için), bilinmiyorsa null */
+    /** Address the server listens on (display only, on the storefront), null if unknown */
     default String serverHost() { return null; }
 
     default int serverPort() { return 0; }
@@ -41,31 +41,31 @@ public interface Platform extends CommandExecutor {
         return dataDirectory().resolve("config.yml");
     }
 
-    /** config.yml yoksa varsayılanı kopyalar ve okur */
+    /** Copies the default config.yml if missing, then reads it */
     ConfigSource loadConfig() throws IOException;
 
-    /** Paketteki varsayılan dil dosyası ile kullanıcının dosyasını birleştirerek mesajları verir */
+    /** Returns messages by merging the bundled default language file with the user's file */
     Map<String, String> loadMessages(String language) throws IOException;
 
-    // --- Oynama süresi (#529): yalnızca Paper/Spigot; proxy'ler istatistik göndermez ---
+    // --- Playtime (#529): Paper/Spigot only; proxies do not send stats ---
 
-    /** Oyunun kendi oynama istatistiği (Statistic.PLAY_ONE_MINUTE) okunabiliyor mu */
+    /** Whether the game's own playtime statistic (Statistic.PLAY_ONE_MINUTE) can be read */
     default boolean supportsPlayerStats() { return false; }
 
     /**
-     * Çevrimiçi oyuncuların istatistiğini oyuncunun thread'inde (Folia'da kendi bölgesinde) okur ve hepsi bitince
-     * {@code done}'ı çağırır (herhangi bir thread'den).
+     * Reads online players' stats on each player's thread (their own region on Folia) and calls {@code done}
+     * once all are done (from any thread).
      */
     default void collectPlayerStats(Consumer<List<PlayerSnapshot>> done) {
         done.accept(List.of());
     }
 
-    /** Çevrimiçi oyuncuların UUID'leri (AFK yoklaması için; herhangi bir thread'den çağrılabilir) */
+    /** UUIDs of online players (for the AFK poll; may be called from any thread) */
     default Collection<UUID> onlinePlayerIds() { return List.of(); }
 
     /**
-     * AFK kaynağı: {@code mode} auto | essentials | cmi | idle | none; idle için eşik {@code idleThresholdMs}.
-     * null: AFK sayılmaz.
+     * AFK source: {@code mode} auto | essentials | cmi | idle | none; for idle the threshold is {@code idleThresholdMs}.
+     * null: never counted as AFK.
      */
     default AfkSource afkSource(String mode, long idleThresholdMs) { return null; }
 

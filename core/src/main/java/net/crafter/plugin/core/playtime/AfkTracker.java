@@ -6,9 +6,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Oyuncu başına toplam AFK süresi (saniye, MUTLAK; {@link PlaytimeStore} ile diske yazılır). Belirli aralıkla
- * {@link #poll} çağrılır; AFK olan oyuncuya son yoklamadan beri geçen süre eklenir. Yoklamalar arası boşluk
- * (sunucu donması, uyku) en çok {@code 2 × aralık} sayılır.
+ * Total AFK time per player (seconds, ABSOLUTE; written to disk with {@link PlaytimeStore}). {@link #poll} is called
+ * at a fixed interval; time since the last poll is added for AFK players. A gap between polls
+ * (server freeze, sleep) counts as at most {@code 2 × interval}.
  */
 public final class AfkTracker {
 
@@ -26,7 +26,7 @@ public final class AfkTracker {
         for (UUID uuid : online) {
             Long prev = lastPoll.put(uuid, nowMs);
             lastSeen.put(uuid, nowMs);
-            if (prev == null) continue; // ilk yoklama: başlangıç
+            if (prev == null) continue; // first poll: baseline
             long elapsed = Math.min(Math.max(0, nowMs - prev), 2 * pollIntervalMs);
             boolean afk;
             try {
@@ -36,11 +36,11 @@ public final class AfkTracker {
             }
             if (afk && elapsed > 0) totalMs.merge(uuid, elapsed, Long::sum);
         }
-        // Çıkmış oyuncunun yoklama başlangıcı silinir (toplam kalır)
+        // The poll baseline of a player who left is removed (the total stays)
         lastPoll.keySet().retainAll(online);
     }
 
-    /** Çıkışta: sonraki girişte AFK yeniden başlangıçtan sayılır */
+    /** On quit: AFK is counted from a fresh baseline on the next join */
     public synchronized void onQuit(UUID uuid) {
         lastPoll.remove(uuid);
     }
@@ -49,7 +49,7 @@ public final class AfkTracker {
         return totalMs.getOrDefault(uuid, 0L) / 1000L;
     }
 
-    // --- Kalıcılık ---
+    // --- Persistence ---
 
     public synchronized Map<String, long[]> export() {
         Map<String, long[]> out = new HashMap<>();
@@ -59,7 +59,7 @@ public final class AfkTracker {
         return out;
     }
 
-    /** {@code staleBeforeMs}'den önce görülmemiş oyuncular yüklenmez (dosya sınırsız büyümez) */
+    /** Players not seen since {@code staleBeforeMs} are not loaded (the file does not grow without bound) */
     public synchronized void load(Map<String, long[]> saved, long staleBeforeMs) {
         if (saved == null) return;
         for (Map.Entry<String, long[]> e : saved.entrySet()) {
@@ -72,7 +72,7 @@ public final class AfkTracker {
                 totalMs.put(uuid, Math.max(0, v[0]));
                 if (seen > 0) lastSeen.put(uuid, seen);
             } catch (IllegalArgumentException ignored) {
-                // bozuk anahtar atlanır
+                // a corrupt key is skipped
             }
         }
     }

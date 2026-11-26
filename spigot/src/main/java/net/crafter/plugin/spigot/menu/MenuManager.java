@@ -59,7 +59,7 @@ public class MenuManager implements Listener {
             
             for (int i = 0; i < size; i++) {
                 int row = startRow + (i / 7);
-                int col = 1 + (i % 7); // 1-7 arası (kenarları boş bırakmak için)
+                int col = 1 + (i % 7); // 1-7 (leave the edges empty)
                 int slot = row * 9 + col;
                 if (slot < inventory.getSize()) {
                     inventory.setItem(slot, items.get(i));

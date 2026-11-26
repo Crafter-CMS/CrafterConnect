@@ -6,15 +6,15 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * config.yml ayarları (CrafterConnect 2.0, #371). Paper/Spigot, Velocity ve BungeeCord aynı alanları kullanır.
+ * config.yml settings (CrafterConnect 2.0, #371). Paper/Spigot, Velocity and BungeeCord use the same fields.
  *
- * Bağlantı iki yoldan biriyle kurulur:
+ * The connection is established in one of two ways:
  * <ul>
- *   <li><b>Sunucu token'ı</b> ({@code server-token}, {@code cct_…}): {@code /crafter connect <kod>} yazar; elle girilmez.</li>
- *   <li><b>Eski bağlantı</b> ({@code website-id} + {@code plugin-secret} + {@code server-id}): 2.0 öncesi kurulumlar
- *   güncellemeden sonra da çalışır; token boşsa kullanılır ve konsola yeniden bağlama uyarısı yazılır.</li>
+ *   <li><b>Server token</b> ({@code server-token}, {@code cct_…}): written by {@code /crafter connect <code>}; never entered by hand.</li>
+ *   <li><b>Legacy connection</b> ({@code website-id} + {@code plugin-secret} + {@code server-id}): pre-2.0 installs
+ *   keep working after the update; used when the token is empty, and a reconnect warning is printed to the console.</li>
  * </ul>
- * {@link #toString()} gizli değerleri yazmaz.
+ * {@link #toString()} does not print secret values.
  */
 public class CrafterConfig {
 
@@ -23,7 +23,7 @@ public class CrafterConfig {
     public static final String DEFAULT_SERVER_ID = "YOUR_SERVER_ID";
     public static final String DEFAULT_API_URL = "api.crafter.net.tr";
 
-    /** Bağlantı biçimi */
+    /** Connection kind */
     public enum Mode { TOKEN, LEGACY, NONE }
 
     private String apiUrl = DEFAULT_API_URL;
@@ -45,7 +45,7 @@ public class CrafterConfig {
     private int afkMinutes = 5;
     private boolean playtimeImportHistory = false;
 
-    /** config.yml'dan okur; eksik alanlarda varsayılan kullanılır */
+    /** Reads from config.yml; missing fields fall back to defaults */
     public static CrafterConfig from(ConfigSource src) {
         CrafterConfig cfg = new CrafterConfig();
         cfg.setApiUrl(src.getString("api-url", DEFAULT_API_URL));
@@ -57,7 +57,7 @@ public class CrafterConfig {
         cfg.setLanguage(src.getString("language", "tr"));
         cfg.setReconnectDelaySeconds(src.getInt("reconnect-delay-seconds", 5));
         cfg.setMaxReconnectAttempts(src.getInt("max-reconnect-attempts", -1));
-        // 1.x Spigot "debug-mode", Velocity "debug" kullanıyordu
+        // 1.x Spigot used "debug-mode", Velocity used "debug"
         cfg.setDebug(src.getBoolean("debug-mode", src.getBoolean("debug", false)));
         cfg.setReportPlayers(src.getBoolean("report-players", true));
         cfg.setBedrockPlayerPrefix(src.getString("bedrock-player-prefix", ""));
@@ -70,7 +70,7 @@ public class CrafterConfig {
         return cfg;
     }
 
-    // --- Bağlantı ---
+    // --- Connection ---
 
     public Mode mode() {
         if (hasServerToken()) return Mode.TOKEN;
@@ -82,24 +82,24 @@ public class CrafterConfig {
         return looksLikeServerToken(serverToken);
     }
 
-    /** Backend'in ürettiği biçim: "cct_" + base64url */
+    /** Format produced by the backend: "cct_" + base64url */
     public static boolean looksLikeServerToken(String value) {
         return value != null && value.matches("^cct_[A-Za-z0-9_-]{20,100}$");
     }
 
-    /** Herhangi bir bağlantı bilgisi var mı (token ya da eski alanlar) */
+    /** Whether any connection info exists (token or legacy fields) */
     public boolean isConfigured() {
         return mode() != Mode.NONE;
     }
 
-    /** Eski alanlar dolu mu (varsayılan yer tutucular sayılmaz) */
+    /** Whether the legacy fields are filled (default placeholders do not count) */
     public boolean isLegacyConfigured() {
         return isValidValue(websiteId, DEFAULT_WEBSITE_ID)
                 && isValidValue(pluginSecret, DEFAULT_PLUGIN_SECRET, "YOUR_SECRET", "YOUR_SECRET_KEY")
                 && isValidValue(serverId, DEFAULT_SERVER_ID, "my-server-1", "my-proxy-1");
     }
 
-    /** API ana adresi: https://api.crafter.net.tr (api-url şemalı ya da şemasız yazılabilir) */
+    /** API base URL: https://api.crafter.net.tr (api-url may be written with or without a scheme) */
     public String httpBase() {
         String host = apiHost();
         boolean ssl = useSsl;
@@ -115,7 +115,7 @@ public class CrafterConfig {
         return http.startsWith("https://") ? "wss://" + http.substring(8) : "ws://" + http.substring(7);
     }
 
-    /** api-url'den yalnızca host[:port][/yol] (şema ve sondaki / atılır) */
+    /** Only host[:port][/path] from api-url (scheme and trailing / are dropped) */
     public String apiHost() {
         String raw = apiUrl == null || apiUrl.isBlank() ? DEFAULT_API_URL : apiUrl.trim();
         raw = raw.replaceFirst("(?i)^(https?|wss?)://", "");
@@ -146,7 +146,7 @@ public class CrafterConfig {
     public String getLanguage() { return language; }
     public void setLanguage(String language) {
         String v = language == null ? "" : language.trim().toLowerCase(Locale.ROOT);
-        // Dil dosyası adı olarak kullanılır: yol karakterleri kabul edilmez
+        // Used as a language file name: path characters are not accepted
         this.language = v.matches("^[a-z]{2}(_[a-z]{2})?$") ? v : "tr";
     }
 
@@ -172,7 +172,7 @@ public class CrafterConfig {
         this.allowedCommandPrefixes = allowedCommandPrefixes == null ? new ArrayList<>() : new ArrayList<>(allowedCommandPrefixes);
     }
 
-    // --- Oynama süresi (#529, yalnızca Paper/Spigot) ---
+    // --- Playtime (#529, Paper/Spigot only) ---
 
     public boolean isPlaytimeEnabled() { return playtimeEnabled; }
     public void setPlaytimeEnabled(boolean playtimeEnabled) { this.playtimeEnabled = playtimeEnabled; }
@@ -188,7 +188,7 @@ public class CrafterConfig {
         this.afkSource = List.of("auto", "essentials", "cmi", "idle", "none").contains(v) ? v : "auto";
     }
 
-    /** Hareketsizlik eşiği, 1–120 dk */
+    /** Idle threshold, 1–120 minutes */
     public int getAfkMinutes() { return afkMinutes; }
     public void setAfkMinutes(int minutes) { this.afkMinutes = Math.max(1, Math.min(120, minutes)); }
 

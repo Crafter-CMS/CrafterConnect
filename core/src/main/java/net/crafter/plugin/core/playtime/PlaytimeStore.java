@@ -12,10 +12,10 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Oynama süresi örneklerinin kalıcı giden kutusu ({@code plugins/CrafterConnect/data/playtime.json}, #529).
- * Komut ACK kuyruğuyla aynı kalıp: bağlantı yokken biriken örnekler sunucu yeniden başlasa da kaybolmaz, backend
- * ACK'leyince silinir. Değerler mutlak olduğundan tekrar gönderim süreyi artırmaz; kuyruk dolarsa en eski örnekler
- * düşer (toplam kaybolmaz, yalnızca günlük dağılım kabalaşır). AFK toplamları da burada saklanır.
+ * Persistent outbox for playtime samples ({@code plugins/CrafterConnect/data/playtime.json}, #529).
+ * Same pattern as the command ACK queue: samples piled up while disconnected survive a server restart and are
+ * removed once the backend ACKs them. Values are absolute, so a resend does not inflate time; if the queue fills up the oldest
+ * samples are dropped (the total is not lost, only the daily breakdown gets coarser). AFK totals are stored here too.
  */
 public class PlaytimeStore {
 
@@ -34,14 +34,14 @@ public class PlaytimeStore {
         Map<String, long[]> afk;
     }
 
-    /** @param file null ise yalnızca bellekte (testler) */
+    /** @param file if null, in memory only (tests) */
     public PlaytimeStore(Path file, CrafterLog log) {
         this.file = file;
         this.log = log == null ? CrafterLog.silent() : log;
         load();
     }
 
-    /** Örnekleri ekler. Aynı oyuncunun örnek zamanı hep artar (aynı milisaniyede iki örnek aynı anahtarı almaz). */
+    /** Adds samples. A player's sample time always increases (two samples in the same millisecond never share a key). */
     public synchronized void add(Collection<StatSample> samples) {
         if (samples.isEmpty()) return;
         for (StatSample s : samples) {
@@ -58,7 +58,7 @@ public class PlaytimeStore {
         save();
     }
 
-    /** Gönderilecekler: hiç gönderilmemiş ya da {@code resendAfterMs}'den önce gönderilip ACK'lenmemiş */
+    /** Samples to send: never sent, or sent before {@code resendAfterMs} and not ACKed */
     public synchronized List<StatSample> due(long nowMs, long resendAfterMs, int limit) {
         List<StatSample> out = new ArrayList<>();
         for (StatSample s : outbox) {
@@ -117,7 +117,7 @@ public class PlaytimeStore {
             try {
                 Files.copy(file, file.resolveSibling(file.getFileName() + ".corrupt-" + System.currentTimeMillis()));
             } catch (IOException ignored) {
-                // kopya alınamazsa devam
+                // continue if the copy fails
             }
         }
     }

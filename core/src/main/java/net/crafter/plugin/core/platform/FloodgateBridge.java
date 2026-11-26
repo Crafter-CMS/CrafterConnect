@@ -4,9 +4,9 @@ import java.lang.reflect.Method;
 import java.util.UUID;
 
 /**
- * Geyser/Floodgate entegrasyonu (isteğe bağlı, yansıma ile; Floodgate yoksa hiçbir şey yapmaz).
- * Floodgate API'si Paper/Spigot, Velocity ve BungeeCord'da aynıdır:
- * {@code FloodgateApi.getInstance().getPlayerPrefix()} ve {@code isFloodgatePlayer(UUID)}.
+ * Geyser/Floodgate integration (optional, via reflection; does nothing without Floodgate).
+ * The Floodgate API is the same on Paper/Spigot, Velocity and BungeeCord:
+ * {@code FloodgateApi.getInstance().getPlayerPrefix()} and {@code isFloodgatePlayer(UUID)}.
  */
 public final class FloodgateBridge {
 
@@ -20,7 +20,7 @@ public final class FloodgateBridge {
         this.isFloodgateMethod = isFloodgateMethod;
     }
 
-    /** Floodgate yüklü değilse ya da API değiştiyse null */
+    /** Null if Floodgate is not installed or the API changed */
     public static FloodgateBridge detect(ClassLoader loader) {
         try {
             Class<?> cls = Class.forName("org.geysermc.floodgate.api.FloodgateApi", true, loader);
@@ -32,7 +32,7 @@ public final class FloodgateBridge {
         }
     }
 
-    /** Floodgate'in Bedrock oyuncu adı öneki (varsayılan "."); okunamazsa null */
+    /** Floodgate's Bedrock player name prefix (default "."); null if it cannot be read */
     public String playerPrefix() {
         try {
             Object v = prefixMethod.invoke(api);

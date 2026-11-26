@@ -9,11 +9,11 @@ import java.net.URL;
 import java.util.function.Consumer;
 
 /**
- * Sürüm kontrolü (#371):
+ * Version check (#371):
  * <ul>
- *   <li>GitHub Releases'ta daha yeni sürüm varsa yalnızca bilgi verilir. 1.x'teki "7 gün sonra eklentiyi kapat"
- *   davranışı kaldırıldı; asıl sınır Crafter kataloğundaki {@code minVersion}'dır.</li>
- *   <li>Katalogdaki asgari sürümün altındaysa konsolda uyarı gösterilir (backend bu sürümü bağlamaz).</li>
+ *   <li>If a newer version exists on GitHub Releases, it is only reported. The 1.x behavior of "disable the plugin
+ *   after 7 days" was removed; the real limit is {@code minVersion} in the Crafter catalog.</li>
+ *   <li>If below the catalog's minimum version, a warning is shown on the console (the backend will not connect this version).</li>
  * </ul>
  */
 public class UpdateChecker {
@@ -56,7 +56,7 @@ public class UpdateChecker {
                 return parseReleaseJson(json, currentVersion);
             }
         } catch (Exception ignored) {
-            // Ağ kesintisi veya rate-limit durumunda eklentinin çalışmasını bozma
+            // Do not break the plugin on a network outage or rate limit
         }
         return UpdateCheckResult.upToDate(currentVersion);
     }
@@ -69,7 +69,7 @@ public class UpdateChecker {
         return new UpdateCheckResult(true, currentVersion, rawLatest, downloadUrl);
     }
 
-    /** current, katalogdaki asgari sürümün altında mı (minVersion yoksa false) */
+    /** Whether current is below the catalog's minimum version (false if there is no minVersion) */
     public static boolean isBelowMinimum(String current, String minVersion) {
         return minVersion != null && !minVersion.isBlank() && isNewerVersion(minVersion, current);
     }

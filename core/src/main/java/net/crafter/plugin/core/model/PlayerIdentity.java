@@ -1,9 +1,9 @@
 package net.crafter.plugin.core.model;
 
 /**
- * Komuttaki ya da olaydaki oyuncu kimliği (#37 bölüm 4): {@code {"type":"minecraft_java","value":"Notch"}}.
- * Minecraft türleri: minecraft_java (kullanıcı adı), minecraft_bedrock (Floodgate önekli ad),
- * minecraft_uuid (Microsoft ile doğrulanmış oyuncunun UUID'si, #378).
+ * Player identity in a command or event (#37 section 4): {@code {"type":"minecraft_java","value":"Notch"}}.
+ * Minecraft types: minecraft_java (username), minecraft_bedrock (Floodgate-prefixed name),
+ * minecraft_uuid (UUID of a Microsoft-verified player, #378).
  */
 public class PlayerIdentity {
 

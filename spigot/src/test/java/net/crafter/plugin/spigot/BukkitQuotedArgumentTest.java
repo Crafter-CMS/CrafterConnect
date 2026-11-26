@@ -14,12 +14,12 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Boşluklu Bedrock/Floodgate adının (backend #247: çift tırnak içinde tek argüman) Bukkit komut ayrıştırmasındaki
- * davranışı. Spigot API'sindeki gerçek {@link SimpleCommandMap} ile denenir (sunucu yok).
+ * How Bukkit command parsing treats a spaced Bedrock/Floodgate name (backend #247: a single double-quoted
+ * argument). Tested with the real {@link SimpleCommandMap} from the Spigot API (no server).
  *
- * Sonuç: Bukkit argümanları yalnızca boşluktan böler, tırnakları yorumlamaz. Tırnaklı ad komuta iki argüman olarak
- * ({@code "".Cool"}, {@code "Gamer""}) ulaşır; birleştirme hedef eklentiye kalır (LuckPerms tırnaklı argümanı tek
- * argüman olarak okur). Brigadier/vanilla komutlarında ({@code give}) oyuncu argümanı tırnak kabul etmez.
+ * Result: Bukkit splits arguments on spaces only and does not interpret quotes. A quoted name reaches the command as
+ * two arguments ({@code "".Cool"}, {@code "Gamer""}); joining is left to the target plugin (LuckPerms reads a quoted
+ * argument as one argument). Brigadier/vanilla commands ({@code give}) do not accept quotes in the player argument.
  */
 class BukkitQuotedArgumentTest {
 
@@ -41,7 +41,7 @@ class BukkitQuotedArgumentTest {
                 });
     }
 
-    /** Sahte Server: yalnızca dispatch'in kullandığı çağrılar (PluginManager.useTimings vb.) */
+    /** Fake Server: only the calls dispatch uses (PluginManager.useTimings, etc.) */
     @SuppressWarnings("unchecked")
     private static <T> T stub(Class<T> type) {
         return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (proxy, method, args) -> {
@@ -70,7 +70,7 @@ class BukkitQuotedArgumentTest {
         assertTrue(map.dispatch(console(), resolved));
         assertArrayEquals(new String[]{"user", "\".Cool", "Gamer\"", "parent", "add", "vip"}, lp.calls.get(0));
 
-        // Java adı: tırnak yok, tek argüman
+        // Java name: no quotes, single argument
         assertTrue(map.dispatch(console(), new PendingCommand("cmd_2", "lp user %player% parent add vip", "Notch").resolveCommand()));
         assertArrayEquals(new String[]{"user", "Notch", "parent", "add", "vip"}, lp.calls.get(1));
     }

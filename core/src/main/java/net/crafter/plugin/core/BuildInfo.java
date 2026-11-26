@@ -3,12 +3,12 @@ package net.crafter.plugin.core;
 import java.io.InputStream;
 import java.util.Properties;
 
-/** Eklentinin sürümü (Maven sürümünden derleme sırasında yazılır) */
+/** Plugin version (written from the Maven version at build time) */
 public final class BuildInfo {
 
-    /** Backend ile konuşulan protokol (#37): commandId ile tekilleştirme, kalıcı kuyruk, hello/heartbeat */
+    /** Protocol spoken with the backend (#37): dedupe by commandId, persistent queue, hello/heartbeat */
     public static final int PROTOCOL_VERSION = 2;
-    /** Bu eklentinin oyun türü (katalog id'si) */
+    /** Game type of this plugin (catalog id) */
     public static final String GAME = "minecraft";
 
     private static final String VERSION = loadVersion();
@@ -28,7 +28,7 @@ public final class BuildInfo {
                 if (!v.isEmpty() && !v.startsWith("$")) return v;
             }
         } catch (Exception ignored) {
-            // sürüm okunamazsa aşağıdaki varsayılan kullanılır
+            // if the version cannot be read the default below is used
         }
         return "2.0.0";
     }

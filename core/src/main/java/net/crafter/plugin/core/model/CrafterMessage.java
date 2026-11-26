@@ -3,10 +3,10 @@ package net.crafter.plugin.core.model;
 import com.google.gson.JsonObject;
 
 /**
- * crafter.net.tr ↔ Plugin arasındaki tüm WebSocket mesajları
- * bu sarmalayıcı ile gönderilir/alınır.
+ * All WebSocket messages between crafter.net.tr and the plugin
+ * are sent/received with this wrapper.
  *
- * Örnek JSON:
+ * Example JSON:
  * {
  *   "type": "COMMAND",
  *   "payload": {
@@ -25,7 +25,7 @@ public class CrafterMessage {
     private JsonObject payload;
     private JsonObject data; // For statistics type
     private String command; // New simple command format support
-    /** type:"error" mesajında hata kodu (server_token_invalid, LICENSE_ERROR …) */
+    /** Error code in a type:"error" message (server_token_invalid, LICENSE_ERROR …) */
     private String code;
     private String message;
 
@@ -80,13 +80,13 @@ public class CrafterMessage {
         return message;
     }
 
-    /** Payload'dan güvenli string okuma */
+    /** Safe string read from the payload */
     public String getPayloadString(String key) {
         if (payload == null || !payload.has(key)) return null;
         return payload.get(key).getAsString();
     }
 
-    /** Payload'dan güvenli int okuma */
+    /** Safe int read from the payload */
     public int getPayloadInt(String key, int defaultVal) {
         if (payload == null || !payload.has(key)) return defaultVal;
         return payload.get(key).getAsInt();

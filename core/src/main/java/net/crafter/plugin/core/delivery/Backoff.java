@@ -3,8 +3,8 @@ package net.crafter.plugin.core.delivery;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Yeniden bağlanma bekleme süresi: üstel artış, üst sınır ve ±%20 rastgele sapma (çok sunucunun aynı anda
- * bağlanmasını önlemek için).
+ * Reconnect delay: exponential growth, an upper bound and ±20% random jitter (so that many servers do not
+ * reconnect at the same time).
  */
 public final class Backoff {
 
@@ -16,7 +16,7 @@ public final class Backoff {
         this.maxSeconds = Math.max(this.baseSeconds, maxSeconds);
     }
 
-    /** attempt 1'den başlar; sapmasız süre */
+    /** attempt starts at 1; delay without jitter */
     public int baseDelay(int attempt) {
         int shift = Math.min(Math.max(attempt, 1) - 1, 16);
         long delay = (long) baseSeconds << shift;

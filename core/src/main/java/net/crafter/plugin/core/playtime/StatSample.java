@@ -2,19 +2,19 @@ package net.crafter.plugin.core.playtime;
 
 import java.util.Objects;
 
-/** Backend'e giden tek örnek (player_stats). Anahtar: uuid:sampledAt; backend sunucu id'sini ekler. */
+/** A single sample sent to the backend (player_stats). Key: uuid:sampledAt; the backend adds the server id. */
 public final class StatSample {
     public String uuid;
     public String username;
     /** Statistic.PLAY_ONE_MINUTE, saniye (mutlak) */
     public long playSeconds;
-    /** Eklentinin saydığı toplam AFK, saniye (mutlak) */
+    /** Total AFK counted by the plugin, seconds (absolute) */
     public long afkSeconds;
     public long lastSeen;
     public long sampledAt;
     /** interval | join | quit */
     public String reason;
-    /** Son gönderim (diske yazılmaz) */
+    /** Last send (not written to disk) */
     transient long sentAt;
 
     public StatSample() {}

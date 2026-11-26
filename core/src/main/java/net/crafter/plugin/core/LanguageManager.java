@@ -3,7 +3,7 @@ package net.crafter.plugin.core;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Dil dosyası mesajları ({0}, {1} … yer tutucularıyla) */
+/** Language file messages (with {0}, {1} … placeholders) */
 public class LanguageManager {
     private final Map<String, String> messages = new HashMap<>();
     private final String language;
@@ -37,7 +37,7 @@ public class LanguageManager {
         return language;
     }
 
-    /** Konsol için § renk kodlarını atar */
+    /** Strips § color codes for the console */
     public static String stripColors(String text) {
         return text == null ? "" : text.replaceAll("§[0-9a-fk-orA-FK-OR]", "");
     }

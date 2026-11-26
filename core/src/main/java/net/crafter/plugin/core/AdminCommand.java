@@ -6,15 +6,15 @@ import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
- * {@code /crafter connect <kod> | disconnect | status | reload} (yetki {@code crafter.admin}, konsoldan da çalışır).
- * Platformlar komutu buraya iletir; {@code shop} ve {@code chest} Paper/Spigot modülünde kalır.
+ * {@code /crafter connect <code> | disconnect | status | reload} (permission {@code crafter.admin}, also works from the console).
+ * Platforms forward the command here; {@code shop} and {@code chest} stay in the Paper/Spigot module.
  */
 public final class AdminCommand {
 
     public static final String PERMISSION = "crafter.admin";
     public static final List<String> SUBCOMMANDS = List.of("connect", "disconnect", "status", "reload");
 
-    /** Komutu yazan (oyuncu ya da konsol) */
+    /** Whoever typed the command (player or console) */
     public interface Sender {
         boolean hasPermission(String permission);
         void send(String message);
@@ -26,7 +26,7 @@ public final class AdminCommand {
         this.service = service;
     }
 
-    /** @return komut bu sınıfta işlendiyse true */
+    /** @return true if the command was handled by this class */
     public boolean handle(Sender sender, String[] args) {
         if (args.length == 0) return false;
         String sub = args[0].toLowerCase(Locale.ROOT);
@@ -42,7 +42,7 @@ public final class AdminCommand {
                 if (args.length < 2) {
                     sender.send(lang.getMessage("prefix") + lang.getMessage("connect_usage"));
                 } else {
-                    // "K7QM 4XPD" gibi boşluklu yazım da kabul edilir
+                    // spaced input such as "K7QM 4XPD" is also accepted
                     service.connect(String.join("", java.util.Arrays.copyOfRange(args, 1, args.length)), reply);
                 }
             }

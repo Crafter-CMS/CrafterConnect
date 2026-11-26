@@ -18,18 +18,18 @@ import java.util.*;
 import java.util.function.LongSupplier;
 
 /**
- * Teslimat komutlarının kalıcı deposu ({@code plugins/CrafterConnect/data/commands.json}, #371, #273).
+ * Persistent store for delivery commands ({@code plugins/CrafterConnect/data/commands.json}, #371, #273).
  *
  * <ul>
- *   <li><b>Kuyruk:</b> oyuncu çevrimdışıyken gelen komutlar. Oyuncu adıyla (büyük/küçük harf duyarsız) ya da
- *   doğrulanmış UUID ile eşlenir; sunucu yeniden başlasa da kaybolmaz.</li>
- *   <li><b>İşlenen id'ler:</b> çalıştırılan ya da çalıştırılmaya başlanan komut id'leri en az 7 gün saklanır.
- *   Aynı commandId ikinci kez gelirse çalıştırılmaz, yalnızca ACK yinelenir.</li>
- *   <li><b>Giden kutusu:</b> bağlantı yokken üretilen ACK/NACK'ler; bağlantı kurulunca sırayla gönderilir.</li>
+ *   <li><b>Queue:</b> commands received while the player is offline. Matched by player name (case-insensitive) or
+ *   verified UUID; survives a server restart.</li>
+ *   <li><b>Processed ids:</b> ids of commands that ran or started running are kept for at least 7 days.
+ *   If the same commandId arrives again it is not run; only the ACK is repeated.</li>
+ *   <li><b>Outbox:</b> ACK/NACKs produced while disconnected; sent in order once connected.</li>
  * </ul>
- * Komut çalıştırılmadan hemen önce id "running" olarak diske yazılır (en çok bir kez çalıştırma). Sunucu bu arada
- * çökerse yeniden açılışta bu komut için NACK ({@code interrupted}) gönderilir ve sipariş incelemeye düşer; komut
- * tekrar çalıştırılmaz.
+ * Right before a command runs, its id is written to disk as "running" (at-most-once execution). If the server
+ * crashes in between, a NACK ({@code interrupted}) is sent for that command on the next startup and the order goes to review; the command
+ * is not run again.
  */
 public class CommandStore {
 
@@ -47,7 +47,7 @@ public class CommandStore {
     private final List<Outgoing> outbox = new ArrayList<>();
     private final Set<String> inFlight = new HashSet<>();
 
-    /** ACK ya da NACK */
+    /** ACK or NACK */
     public static final class Outgoing {
         public final String commandId;
         public final String kind;   // "ack" | "nack"
@@ -77,7 +77,7 @@ public class CommandStore {
     private static final class Processed {
         long at;
         String state; // running | done
-        /** Son sonuç; 2.0 öncesi kayıtlarda yok (o zaman "executed" sayılır) */
+        /** Last result; absent in pre-2.0 records (then treated as "executed") */
         String kind;
         String status;
         String reason;
@@ -101,8 +101,8 @@ public class CommandStore {
     }
 
     /**
-     * @param file       depo dosyası; null ise yalnızca bellekte çalışır (testler)
-     * @param legacyFile 2.0 öncesi geliştirme sürümündeki {@code pending-commands.json}; varsa taşınır ve silinir
+     * @param file       store file; if null, works in memory only (tests)
+     * @param legacyFile {@code pending-commands.json} from the pre-2.0 development build; migrated and deleted if present
      */
     public CommandStore(Path file, Path legacyFile, LongSupplier clock, CrafterLog log) {
         this.file = file;
@@ -118,7 +118,7 @@ public class CommandStore {
         this(file, null, null, null);
     }
 
-    /** Eşleme anahtarı: küçük harf; Floodgate oyun içinde boşlukları "_" yaptığı için boşluk "_" sayılır */
+    /** Lookup key: lower case; Floodgate turns spaces into "_" in game, so a space counts as "_" */
     public static String playerKey(String player) {
         return player == null ? "" : player.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
     }
@@ -131,7 +131,7 @@ public class CommandStore {
         save();
     }
 
-    /** Oyuncunun bekleyen komutlarını geliş sırasıyla verir ve kuyruktan siler (ad ya da doğrulanmış UUID ile). */
+    /** Returns the player's pending commands in arrival order and removes them from the queue (by name or verified UUID). */
     public synchronized List<PendingCommand> drainFor(String playerName, String uuid) {
         String key = playerKey(playerName);
         String uuidKey = normalizeUuid(uuid);
@@ -162,15 +162,15 @@ public class CommandStore {
         return queue.size();
     }
 
-    // --- İşlenen id'ler ---
+    // --- Processed ids ---
 
     public synchronized boolean isProcessed(String commandId) {
         return commandId != null && (processed.containsKey(commandId) || inFlight.contains(commandId));
     }
 
     /**
-     * İşlenmiş komutun son sonucu (aynı commandId tekrar gelince aynısı gönderilir). Reddedilen komut için NACK döner,
-     * böylece backend kaydı yanlışlıkla "executed" yapmaz. Sonucu kayıtlı olmayan eski kayıtlar için ack executed.
+     * Last result of a processed command (sent again when the same commandId arrives). Returns a NACK for a rejected command,
+     * so the backend does not mark the record "executed" by mistake. ack executed for old records with no stored result.
      */
     public synchronized Outgoing resultOf(String commandId) {
         Processed p = commandId == null ? null : processed.get(commandId);
@@ -183,8 +183,8 @@ public class CommandStore {
     }
 
     /**
-     * Komutu çalıştırmaya başlamadan önce çağrılır. Aynı id daha önce işlendiyse ya da şu an çalışıyorsa false.
-     * id null ise (çok eski backend) her zaman true.
+     * Called before the command starts running. False if the same id was already processed or is running right now.
+     * Always true if the id is null (very old backend).
      */
     public synchronized boolean beginRun(String commandId) {
         if (commandId == null) return true;
@@ -196,7 +196,7 @@ public class CommandStore {
         return true;
     }
 
-    /** Çalıştırma bitti; sonuç ACK/NACK'i aynı yazımda giden kutusuna eklenir. */
+    /** Execution finished; the ACK/NACK result is added to the outbox in the same write. */
     public synchronized void finishRun(String commandId, Outgoing result) {
         if (commandId == null) return;
         inFlight.remove(commandId);
@@ -227,7 +227,7 @@ public class CommandStore {
         return outbox.size();
     }
 
-    // --- Dosya ---
+    // --- File ---
 
     private void prune() {
         long cutoff = clock.getAsLong() - PROCESSED_RETENTION_MS;
@@ -239,7 +239,7 @@ public class CommandStore {
         }
     }
 
-    /** Önceki çalışmada "running" kalan komutlar: çalışıp çalışmadığı bilinmez, tekrar çalıştırılmaz, NACK edilir */
+    /** Commands left "running" by the previous run: unknown whether they ran, not re-run, NACKed */
     private void recoverInterrupted() {
         boolean changed = false;
         for (Map.Entry<String, Processed> e : processed.entrySet()) {
@@ -270,17 +270,17 @@ public class CommandStore {
             }
             if (snapshot.outbox != null) snapshot.outbox.stream().filter(o -> o != null && o.commandId != null).forEach(outbox::add);
         } catch (Exception e) {
-            // Bozuk dosya silinmez; yanına kopyalanır ki elle incelenebilsin
+            // A corrupt file is not deleted; it is copied aside so it can be inspected by hand
             log.error("[CrafterConnect] Could not read command store: " + e.getMessage());
             try {
                 Files.copy(file, file.resolveSibling(file.getFileName() + ".corrupt-" + clock.getAsLong()));
             } catch (IOException ignored) {
-                // kopya alınamazsa devam edilir
+                // continue if the copy fails
             }
         }
     }
 
-    /** TASK-273 biçimi: {"queue":{"oyuncu":[…]},"executedIds":[…]} */
+    /** TASK-273 format: {"queue":{"player":[…]},"executedIds":[…]} */
     private void migrateLegacy(Path legacyFile) {
         if (legacyFile == null || !Files.exists(legacyFile)) return;
         try {

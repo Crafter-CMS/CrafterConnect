@@ -72,7 +72,7 @@ class PlaytimeReporterTest {
         assertEquals(0, r.flush(offline));
         assertTrue(Files.exists(file));
 
-        PlaytimeReporter restarted = reporter(file); // sunucu çöktü / yeniden başladı
+        PlaytimeReporter restarted = reporter(file); // server crashed / restarted
         assertEquals(2, restarted.queued());
         restarted.onConnected();
         assertEquals(2, restarted.flush(online));
@@ -96,7 +96,7 @@ class PlaytimeReporterTest {
         PlaytimeReporter r = reporter(null);
         r.record(List.of(new PlayerSnapshot(A, "Oyuncu1", 100)), "interval");
         r.flush(online);
-        r.onAck(List.of(), online); // backend player_stats'ı tanıyor ama bu örneği ACK'lemedi (geçici hata)
+        r.onAck(List.of(), online); // the backend knows player_stats but did not ACK this sample (transient error)
         assertEquals(1, sent.size(), "not resent immediately");
         clock.addAndGet(PlaytimeReporter.RESEND_AFTER_MS);
         assertEquals(1, r.flush(online));
@@ -160,7 +160,7 @@ class PlaytimeReporterTest {
         List<List<PlayerSnapshot>> delivered = new ArrayList<>();
         SnapshotBatch b = new SnapshotBatch(3, delivered::add);
         b.add(new PlayerSnapshot(A, "Oyuncu1", 1));
-        b.skip(); // çıkan oyuncu
+        b.skip(); // player who left
         assertTrue(delivered.isEmpty());
         b.add(null); // okunamayan
         assertEquals(1, delivered.size());

@@ -17,7 +17,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Oynama süresi zamanlayıcısı (#529): kısaltılmış "dakika" ile, gerçek sunucu ya da backend yok */
+/** Playtime scheduler (#529): with a shortened "minute", no real server or backend */
 class PlaytimeSchedulingTest {
 
     static final UUID A = UUID.fromString("069a79f4-44e9-4726-a5be-fca90e38aaf5");
@@ -25,7 +25,7 @@ class PlaytimeSchedulingTest {
     @TempDir Path dir;
     CrafterConnectService service;
 
-    /** Paper benzeri: istatistik okunur, oyuncu hep AFK */
+    /** Paper-like: stats are readable, the player is always AFK */
     static class StatsPlatform extends Fakes.FakePlatform {
         final AtomicInteger collects = new AtomicInteger();
         final AtomicInteger afkChecks = new AtomicInteger();
@@ -81,7 +81,7 @@ class PlaytimeSchedulingTest {
     @Test
     void joinQuitAndShutdownSamplesAreRecorded() throws Exception {
         StatsPlatform platform = new StatsPlatform();
-        platform.configValues.put("playtime.sample-minutes", "60"); // zamanlayıcı bu testte örnek almaz
+        platform.configValues.put("playtime.sample-minutes", "60"); // the scheduler takes no sample in this test
         service = start(platform);
         service.recordPlayerStats(new PlayerSnapshot(A, "Oyuncu1", 500), "join");
         service.recordPlayerStats(new PlayerSnapshot(A, "Oyuncu1", 800), "quit");
@@ -100,7 +100,7 @@ class PlaytimeSchedulingTest {
         assertNull(service.playtime());
         service.stop();
 
-        Fakes.FakePlatform proxy = new Fakes.FakePlatform(); // Velocity/BungeeCord: istatistik yok
+        Fakes.FakePlatform proxy = new Fakes.FakePlatform(); // Velocity/BungeeCord: no stats
         service = start(proxy);
         assertNull(service.playtime());
         service.recordPlayerStats(new PlayerSnapshot(A, "Oyuncu1", 1), "join");

@@ -15,7 +15,7 @@
     <name>CrafterConnect Spigot</name>
 
     <dependencies>
-        <!-- Core modül -->
+        <!-- Core module -->
         <dependency>
             <groupId>net.crafter</groupId>
             <artifactId>crafter-connect-core</artifactId>
@@ -81,7 +81,7 @@
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <relocations>
-                                <!-- Çakışmaları önlemek için shade et -->
+                                <!-- Shade to avoid conflicts -->
                                 <relocation>
                                     <pattern>com.google.gson</pattern>
                                     <shadedPattern>net.crafter.shaded.gson</shadedPattern>

@@ -44,7 +44,7 @@ class CommandProcessorTest {
         assertEquals(List.of("give notch diamond 1"), platform.executed);
         assertEquals(List.of(CommandStore.Outgoing.ack("cmd_1", "executed")), sent);
 
-        // Backend ACK'i alamadı ve aynı id'yi yeniden gönderdi
+        // The backend missed the ACK and resent the same id
         processor.onCommand(cmd("cmd_1", "give %player% diamond 1", "notch"));
         assertEquals(1, platform.executed.size(), "same commandId must not run twice");
         assertEquals(CommandStore.Outgoing.ack("cmd_1", "executed"), sent.get(1));
@@ -67,11 +67,11 @@ class CommandProcessorTest {
         assertTrue(platform.executed.isEmpty());
         assertEquals(List.of(CommandStore.Outgoing.ack("cmd_1", "queued")), sent);
 
-        processor.onCommand(cmd("cmd_1", "give %player% diamond 1", "Notch")); // tekrar gönderim
+        processor.onCommand(cmd("cmd_1", "give %player% diamond 1", "Notch")); // resend
         assertEquals(CommandStore.Outgoing.ack("cmd_1", "queued"), sent.get(1));
         assertEquals(1, store.queuedCount());
 
-        processor.onPlayerJoin("NOTCH", UUID.randomUUID()); // eşleme harf duyarsız; %player% oyundaki yazımla
+        processor.onPlayerJoin("NOTCH", UUID.randomUUID()); // matching is case-insensitive; %player% uses the in-game spelling
         assertEquals(List.of("give NOTCH diamond 1"), platform.executed);
         assertEquals(CommandStore.Outgoing.ack("cmd_1", "executed"), sent.get(2));
     }
@@ -121,13 +121,13 @@ class CommandProcessorTest {
     @Test
     void rejectedCommandResentWithSameIdGetsTheSameNack() {
         platform.online.add("Notch");
-        processor.onCommand(cmd("cmd_p", "op Notch", "Notch"));            // önek listesi yok: geçer, ama:
+        processor.onCommand(cmd("cmd_p", "op Notch", "Notch"));            // no prefix list: passes, but:
         sent.clear();
         CommandProcessor strict = new CommandProcessor(store, platform,
                 () -> new CommandGuard(null, "minecraft_java", List.of("give"), List.of()), platform.log);
         strict.setSender(sent::add);
         strict.onCommand(cmd("cmd_n", "op Notch", "Notch"));
-        strict.onCommand(cmd("cmd_n", "op Notch", "Notch"));                 // backend tekrar gönderdi
+        strict.onCommand(cmd("cmd_n", "op Notch", "Notch"));                 // the backend resent it
         CommandStore.Outgoing nack = CommandStore.Outgoing.nack("cmd_n", CommandGuard.REASON_PREFIX_NOT_ALLOWED);
         assertEquals(List.of(nack, nack), sent, "a rejected command must never be acked as executed");
         assertEquals(List.of("op Notch"), platform.executed);

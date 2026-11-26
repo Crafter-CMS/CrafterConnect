@@ -36,13 +36,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * CrafterConnect'in platformdan bağımsız çekirdeği: ayar, dil, kalıcı kuyruk, bağlantı ve
- * {@code /crafter connect | disconnect | status | reload}. Paper/Spigot, Velocity ve BungeeCord modülleri yalnızca
- * olayları ve komutları buraya iletir.
+ * Platform-independent core of CrafterConnect: config, language, persistent queue, connection and
+ * {@code /crafter connect | disconnect | status | reload}. The Paper/Spigot, Velocity and BungeeCord modules only
+ * forward events and commands here.
  */
 public class CrafterConnectService {
 
-    static final String TOKEN_COMMENT = "Sunucu token'ı / Server token: /crafter connect yazar, elle girmeyin ve paylaşmayın.\n"
+    static final String TOKEN_COMMENT = "Server token (cct_...): written by /crafter connect.\n"
             + "Written by /crafter connect. Do not edit or share.";
 
     private final Platform platform;
@@ -65,18 +65,18 @@ public class CrafterConnectService {
     private CommandStore store;
     private CommandProcessor processor;
     private ScheduledExecutorService io;
-    /** Oynama süresi (#529); proxy'lerde ve playtime.enabled: false iken null */
+    /** Playtime (#529); null on proxies and when playtime.enabled is false */
     private volatile PlaytimeReporter playtime;
     private volatile AfkSource afkSource;
     private volatile ScheduledFuture<?> sampleTask;
     private volatile ScheduledFuture<?> afkTask;
 
     static final long AFK_POLL_SECONDS = 30;
-    /** Zamanlayıcı birimi: ayardaki "dakika" (testler kısaltır) */
+    /** Scheduler unit: the "minutes" in the config (tests shorten it) */
     long playtimeMinuteMs = 60_000;
     long afkPollMs = AFK_POLL_SECONDS * 1000;
 
-    /** data/connection.json: gizli olmayan bağlantı bilgisi (mağaza adı, sunucu id) */
+    /** data/connection.json: non-secret connection info (store name, server id) */
     static final class ConnectionInfo {
         String websiteId;
         String serverId;
@@ -94,7 +94,7 @@ public class CrafterConnectService {
         this.http = http;
     }
 
-    // --- Yaşam döngüsü ---
+    // --- Lifecycle ---
 
     public synchronized void start() {
         if (io == null || io.isShutdown()) {
@@ -127,7 +127,7 @@ public class CrafterConnectService {
         }
     }
 
-    /** /crafter reload: ayar ve dil dosyasını yeniden okur, bağlantıyı yeniden kurar */
+    /** /crafter reload: re-reads the config and language file and reconnects */
     public synchronized void reload() {
         stopClient();
         stopPlaytime();
@@ -136,9 +136,9 @@ public class CrafterConnectService {
         startClient();
     }
 
-    // --- Oynama süresi (#529) ---
+    // --- Playtime (#529) ---
 
-    /** Paper/Spigot: 5 dk'da bir (ayar) istatistik örneği, 30 sn'de bir AFK yoklaması */
+    /** Paper/Spigot: a stat sample every 5 minutes (configurable), an AFK poll every 30 seconds */
     private void startPlaytime() {
         if (!platform.supportsPlayerStats() || !config.isPlaytimeEnabled() || io == null) return;
         if (playtime == null) {
@@ -188,8 +188,8 @@ public class CrafterConnectService {
     }
 
     /**
-     * Giriş ve çıkışta oyuncunun thread'inden çağrılır (istatistik orada okunur); disk ve ağ işi io thread'inde.
-     * Backend sıradan bağımsızdır: çıkış örneği player_left'ten sonra gelse de süre bir kez yazılır.
+     * Called from the player's thread on join and quit (stats are read there); disk and network work runs on the io thread.
+     * The backend is order-independent: even if the quit sample arrives after player_left, time is recorded once.
      */
     public void recordPlayerStats(PlayerSnapshot snapshot, String reason) {
         PlaytimeReporter r = playtime;
@@ -201,12 +201,12 @@ public class CrafterConnectService {
                 flushPlaytime();
             });
         } catch (RejectedExecutionException e) {
-            // kapanırken: örnek doğrudan kuyruğa yazılır, sonraki açılışta gönderilir
+            // during shutdown: the sample is written straight to the queue and sent on the next startup
             r.record(List.of(snapshot), reason);
         }
     }
 
-    /** Kapanışta ana thread'den: son değerler eşzamanlı kuyruğa yazılır, bir sonraki açılışta gönderilir */
+    /** On shutdown, from the main thread: final values are written to the queue synchronously and sent on the next startup */
     public void recordShutdown(List<PlayerSnapshot> snapshots) {
         PlaytimeReporter r = playtime;
         if (r == null || snapshots == null || snapshots.isEmpty() || sampleTask == null) return;
@@ -240,7 +240,7 @@ public class CrafterConnectService {
             log.error("[CrafterConnect] Could not read language file: " + e.getMessage());
         }
         if (config.hasServerToken() && SecureFiles.isReadableByOthers(platform.configFile())) {
-            // Token taşıyan dosya başka kullanıcılara açık olmamalı
+            // A file holding the token must not be readable by other users
             if (SecureFiles.restrictFile(platform.configFile())) {
                 log.warn("[CrafterConnect] config.yml permissions were restricted to the server user (it holds the server token).");
             }
@@ -278,7 +278,7 @@ public class CrafterConnectService {
         client.start();
     }
 
-    /** Bağlantı yoksa her gönderimi reddeden gönderici */
+    /** Sender that rejects every send when there is no connection */
     private PlaytimeReporter.Sender senderOf(CrafterWebSocketClient c) {
         return c == null ? data -> false : c::sendPlayerStats;
     }
@@ -293,8 +293,8 @@ public class CrafterConnectService {
     // --- /crafter connect ---
 
     /**
-     * Bağlantı kodunu kullanır (HTTP isteği ayrı thread'de). Başarılıysa token config.yml'a 600 izniyle yazılır ve
-     * bağlantı token'la yeniden kurulur. Eski bağlantı alanları dosyada kalır ama kullanılmaz.
+     * Redeems the link code (HTTP request on a separate thread). On success the token is written to config.yml with
+     * 600 permissions and the connection is re-established with the token. Legacy connection fields stay in the file but are unused.
      */
     public void connect(String rawCode, Consumer<String> reply) {
         if (!connecting.compareAndSet(false, true)) {
@@ -344,7 +344,7 @@ public class CrafterConnectService {
         return lang.getMessage("prefix") + text;
     }
 
-    /** /crafter disconnect: token silinir ve bağlantı kapatılır (panelde sunucu kalır; yeniden bağlamak için yeni kod) */
+    /** /crafter disconnect: the token is removed and the connection closed (the server stays in the panel; reconnecting needs a new code) */
     public synchronized void disconnect(Consumer<String> reply) {
         if (!config.hasServerToken()) {
             reply.accept(msg("disconnect_not_connected"));
@@ -400,11 +400,11 @@ public class CrafterConnectService {
         return lines;
     }
 
-    // --- Oyuncu olayları ---
+    // --- Player events ---
 
     public void onPlayerJoin(String username, UUID uuid) {
         PlayerIdentity identity = identityOf(username, uuid);
-        // Kuyruk bağlantı olmasa da işlenir; ACK'ler giden kutusunda bekler
+        // The queue is processed even without a connection; ACKs wait in the outbox
         if (processor != null) processor.onPlayerJoin(username, uuid);
         CrafterWebSocketClient c = wsClient;
         if (c != null) c.onPlayerJoin(username, identity);
@@ -442,7 +442,7 @@ public class CrafterConnectService {
         if (c != null) c.useChestItem(username, identityOf(username, uuid), chestItemId);
     }
 
-    // --- Yardımcılar ---
+    // --- Helpers ---
 
     CommandGuard guard() {
         CrafterWebSocketClient.AuthInfo a = auth;
@@ -450,7 +450,7 @@ public class CrafterConnectService {
                 config.getAllowedCommandPrefixes(), a == null ? List.of() : a.allowedCommandPrefixes());
     }
 
-    /** Floodgate'in öneki (varsa), yoksa config'teki bedrock-player-prefix; ikisi de yoksa null */
+    /** Floodgate's prefix (if present), otherwise bedrock-player-prefix from the config; null if neither exists */
     public String floodgatePrefix() {
         FloodgateBridge fg = floodgate;
         String fromFloodgate = fg == null ? null : fg.playerPrefix();
@@ -522,7 +522,7 @@ public class CrafterConnectService {
         return v == null || v.isBlank() ? def : v;
     }
 
-    // --- Platform erişimi ---
+    // --- Platform access ---
 
     public CrafterConfig config() { return config; }
     public LanguageManager lang() { return lang; }
@@ -534,7 +534,7 @@ public class CrafterConnectService {
         return c != null && c.isConnected();
     }
     public UpdateCheckResult updateResult() { return updateResult; }
-    /** Testler için */
+    /** For tests */
     CommandProcessor processor() { return processor; }
     PlaytimeReporter playtime() { return playtime; }
 }

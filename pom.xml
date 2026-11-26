@@ -36,8 +36,8 @@
                 <version>1.6.0</version>
             </dependency>
 
-            <!-- Java-WebSocket SLF4J kullanır; gömülü NOP sağlayıcı "No SLF4J providers" uyarısını kaldırır.
-                 slf4j shade'de relocate edildiği için sunucunun kendi SLF4J'siyle çakışmaz. -->
+            <!-- Java-WebSocket uses SLF4J; the bundled NOP provider silences the "No SLF4J providers" warning.
+                 slf4j is relocated in the shade, so it does not clash with the server's own SLF4J. -->
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>

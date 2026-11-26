@@ -36,7 +36,7 @@
 
     <build>
         <resources>
-            <!-- Sürüm bilgisi (BuildInfo) Maven sürümünden doldurulur -->
+            <!-- Version info (BuildInfo) is filled from the Maven version -->
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
